@@ -22,6 +22,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     permissions:
+      contents: read   # K4NZA: needed to check out a private repo
       packages: write
     steps:
     - name: Set variables useful for later
