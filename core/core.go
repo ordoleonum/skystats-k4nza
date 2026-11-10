@@ -110,8 +110,7 @@ func main() {
 
 	// Welcome to skystats
 	if banner, err := os.ReadFile("../docs/logo/skystats_ascii.txt"); err == nil {
-		log.Info().Msg("
-" + string(banner))
+		log.Info().Msg("\n" + string(banner))
 	}
 	if version == "dev" {
 		log.Info().Msgf("Welcome to Skystats! (build: %s • %s)", version, commit)
