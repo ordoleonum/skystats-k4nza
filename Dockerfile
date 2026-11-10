@@ -23,7 +23,7 @@ RUN \
     npm install && \
     npm run build
 
-LABEL org.opencontainers.image.source="https://github.com/tomcarman/skystats"
+LABEL org.opencontainers.image.source="https://github.com/ordoleonum/skystats-k4nza"
 FROM ghcr.io/sdr-enthusiasts/docker-baseimage:base
 #SHELL ["/bin/bash", "-o", "pipefail", "-c", "-x"]
 

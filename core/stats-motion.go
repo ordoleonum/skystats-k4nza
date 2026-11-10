@@ -375,7 +375,9 @@ func getAircraftsForMeasurementStatistics(pg *postgres) []Aircraft {
 				WHERE lowest_aircraft_processed = false OR
 					highest_aircraft_processed = false OR
 					fastest_aircraft_processed = false OR
-					slowest_aircraft_processed = false`
+					slowest_aircraft_processed = false
+				ORDER BY first_seen ASC
+				LIMIT 2000`
 
 	rows, err := pg.db.Query(context.Background(), query)
 	if err != nil {

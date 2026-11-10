@@ -11,8 +11,9 @@ import (
 )
 
 type aircraftCacheEntry struct {
-	aircraft  Aircraft
-	expiresAt time.Time
+	aircraft    Aircraft
+	expiresAt   time.Time
+	lastWritten time.Time // K4NZA: last time this aircraft was written to the DB
 }
 
 type postgres struct {

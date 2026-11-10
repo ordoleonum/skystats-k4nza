@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -32,8 +32,10 @@ func updateRegistrations(pg *postgres) {
 		registration, err := getRegistration(aircraft)
 
 		if err != nil {
-			log.Error().Err(err).Msg("Error fetching registration for " + aircraft.Hex)
-			continue
+			// K4NZA: stop this round on the first failure (adsbdb down or rate
+			// limiting) instead of waiting out up to 50 timeouts in a row.
+			log.Warn().Err(err).Msg("Error fetching registration for " + aircraft.Hex + " - will retry later")
+			break
 		}
 
 		if registration.Response.Aircraft.ModeS == "" {
@@ -118,20 +120,23 @@ func getRegistration(aircraft Aircraft) (*RegistrationInfo, error) {
 	url := "https://api.adsbdb.com/v0/aircraft/"
 	url += aircraft.Hex
 
-	response, err := http.Get(url)
-
+	// K4NZA: timeout + body close via httpGetBytes. A 404 means adsbdb does not
+	// know this aircraft (treated as "no registration", as before). Any other
+	// error (rate limit, server error, network) is returned so the aircraft
+	// stays unprocessed and is retried later instead of being marked empty.
+	data, err := httpGetBytes(remoteHTTPClient, url, nil)
 	if err != nil {
-		return nil, err
-	}
-
-	data, err := io.ReadAll(response.Body)
-
-	if err != nil {
+		var statusErr *HTTPStatusError
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusNotFound {
+			return &RegistrationInfo{}, nil
+		}
 		return nil, err
 	}
 
 	var registrationResponse RegistrationInfo
-	json.Unmarshal(data, &registrationResponse)
+	if err := json.Unmarshal(data, &registrationResponse); err != nil {
+		log.Debug().Err(err).Msgf("getRegistration() - unexpected response for %s", aircraft.Hex)
+	}
 
 	return &registrationResponse, nil
 
@@ -145,7 +150,8 @@ func unprocessedRegistrations(pg *postgres) []Aircraft {
 		WHERE 
 			hex != '' AND
 			registration_processed = false
-		ORDER BY first_seen ASC`
+		ORDER BY first_seen ASC
+		LIMIT 200`
 
 	rows, err := pg.db.Query(context.Background(), query)
 

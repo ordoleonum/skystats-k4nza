@@ -87,10 +87,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	log.Info().Msg("Checking K4NZA performance indexes")
+	ensureK4nzaIndexes(pg)
+
+	// K4NZA: a failed plane-alert-db download (no internet, GitHub rate limit)
+	// used to exit the program, which put the container into a restart loop.
+	// Now it is logged and retried by the daily refresh in the background loop.
 	log.Info().Msg("Checking if interesting aircraft reference data needs updating from plane-alert-db")
 	if err := UpsertPlaneAlertDb(pg); err != nil {
-		log.Error().Msgf("Error updating interesting aircraft data: %v", err)
-		os.Exit(1)
+		log.Warn().Msgf("Could not update interesting aircraft data (will retry later): %v", err)
 	}
 
 	// Start API server in a separate goroutine
@@ -103,15 +108,10 @@ func main() {
 
 	log.Info().Msg("Starting scheduled tasks")
 
-	updateAircraftDataTicker := time.NewTicker(2 * time.Second)
-	updateStatisticsTicker := time.NewTicker(120 * time.Second)
-	updateRegistrationsTicker := time.NewTicker(30 * time.Second)
-	updateRoutesTicker := time.NewTicker(300 * time.Second)
-	updateInterestingSeenTicker := time.NewTicker(120 * time.Second)
-
 	// Welcome to skystats
 	if banner, err := os.ReadFile("../docs/logo/skystats_ascii.txt"); err == nil {
-		log.Info().Msg("\n" + string(banner))
+		log.Info().Msg("
+" + string(banner))
 	}
 	if version == "dev" {
 		log.Info().Msgf("Welcome to Skystats! (build: %s • %s)", version, commit)
@@ -121,34 +121,66 @@ func main() {
 
 	defer func() {
 		log.Info().Msg("Closing database connection")
-		updateAircraftDataTicker.Stop()
-		updateStatisticsTicker.Stop()
-		updateRegistrationsTicker.Stop()
-		updateRoutesTicker.Stop()
-		updateInterestingSeenTicker.Stop()
 		pg.Close()
 	}()
 
+	// K4NZA: the stock code ran everything from one loop, so a slow call to
+	// adsbdb / adsb.im / GitHub, or a slow statistics query, stopped aircraft
+	// from being recorded. Recording now has its own loop; everything else
+	// runs in a background loop. Every task is also protected against panics
+	// so one bad record cannot take the whole program down.
+	go backgroundLoop(pg)
+
+	ingestTicker := time.NewTicker(2 * time.Second)
+	defer ingestTicker.Stop()
+	for range ingestTicker.C {
+		runSafely("update aircraft", func() { updateAircraftDatabase(pg) })
+	}
+}
+
+func backgroundLoop(pg *postgres) {
+	updateStatisticsTicker := time.NewTicker(120 * time.Second)
+	updateRegistrationsTicker := time.NewTicker(30 * time.Second)
+	updateRoutesTicker := time.NewTicker(300 * time.Second)
+	updateInterestingSeenTicker := time.NewTicker(120 * time.Second)
+	maintenanceTicker := time.NewTicker(1 * time.Hour)
+	planeAlertTicker := time.NewTicker(24 * time.Hour)
+
+	// run maintenance shortly after start-up, then hourly
+	runSafely("maintenance", func() { runMaintenance(pg) })
+
 	for {
 		select {
-		case <-updateAircraftDataTicker.C:
-			log.Debug().Msg("Update Aircraft")
-			updateAircraftDatabase(pg)
 		case <-updateStatisticsTicker.C:
-			log.Debug().Msg("Update Statistics")
-			updateMeasurementStatistics(pg)
+			runSafely("update statistics", func() { updateMeasurementStatistics(pg) })
 		case <-updateRegistrationsTicker.C:
-			log.Debug().Msg("Update Aircraft Registration")
-			updateRegistrations(pg)
+			runSafely("update registrations", func() { updateRegistrations(pg) })
 		case <-updateRoutesTicker.C:
-			log.Debug().Msg("Update Routes")
-			updateRoutes(pg)
+			runSafely("update routes", func() { updateRoutes(pg) })
 		case <-updateInterestingSeenTicker.C:
-			log.Debug().Msg("Update Interesting Seen")
-			updateInterestingSeen(pg)
+			runSafely("update interesting", func() { updateInterestingSeen(pg) })
+		case <-maintenanceTicker.C:
+			runSafely("maintenance", func() { runMaintenance(pg) })
+		case <-planeAlertTicker.C:
+			runSafely("plane-alert-db refresh", func() {
+				if err := UpsertPlaneAlertDb(pg); err != nil {
+					log.Warn().Msgf("plane-alert-db refresh failed (will retry tomorrow): %v", err)
+				}
+			})
 		}
 	}
+}
 
+// runSafely runs a task and recovers from panics, logging them instead of
+// crashing the program.
+func runSafely(name string, task func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().Msgf("Recovered from panic in task %q: %v", name, r)
+		}
+	}()
+	log.Debug().Msg("Running task: " + name)
+	task()
 }
 
 func checkFlags() {

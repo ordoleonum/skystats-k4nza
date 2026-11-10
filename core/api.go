@@ -133,6 +133,14 @@ func (s *APIServer) Start() {
 		}
 
 		api.GET("/version", s.getVersion)
+
+		// K4NZA: data export
+		export := api.Group("/export")
+		{
+			export.GET("/summary", s.exportSummary)
+			export.GET("/csv/:dataset", s.exportCSV)
+			export.GET("/all.zip", s.exportAllZip)
+		}
 	}
 
 	// Serve static files

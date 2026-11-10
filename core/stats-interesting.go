@@ -228,7 +228,8 @@ func unprocessedInteresting(pg *postgres) []Aircraft {
 		WHERE
 			hex != '' AND
 			interesting_processed = false
-		ORDER BY first_seen ASC`
+		ORDER BY first_seen ASC
+		LIMIT 1000`
 
 	rows, err := pg.db.Query(context.Background(), query)
 

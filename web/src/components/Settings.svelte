@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
     import { settings } from '../stores/settings';
     import { IconBrandGithub } from '@tabler/icons-svelte';
+    import ExportData from './ExportData.svelte';
 
 
     let activeMenuItem = 'display';
@@ -16,6 +17,7 @@
 
     const menuItems = [
         { id: 'display', label: 'Display' },
+        { id: 'export', label: 'Export Data' },
         { id: 'about', label: 'About' }
     ];
 
@@ -76,11 +78,13 @@
     onMount(() => {
         settings.load();
         fetchVersion();
+        // K4NZA: the navbar "Export" button opens this dialog on the export page
+        window.addEventListener('skystats-open-export', () => { activeMenuItem = 'export'; });
     });
 </script>
 
 <dialog id="settings-modal" class="modal">
-    <div class="modal-box w-11/12 max-w-5xl h-[600px] p-0 relative">
+    <div class="modal-box w-11/12 max-w-5xl h-[680px] p-0 relative">
         <form method="dialog" class="absolute right-2 top-2 z-10">
             <button class="btn btn-md btn-circle btn-ghost text-2xl">✕</button>
         </form>
@@ -104,7 +108,7 @@
             </div>
 
             <!-- Settings -->
-            <div class="flex-1 p-6 flex flex-col">
+            <div class="flex-1 p-6 flex flex-col overflow-y-auto">
                 <div class="flex-1 {activeMenuItem === 'about' ? 'flex items-center justify-center' : ''}">
                     {#if activeMenuItem === 'display'}
                         <h4 class="text-lg font-semibold mb-6">Display Settings</h4>
@@ -191,6 +195,9 @@
                             </div>
                         </form>
 
+                    {:else if activeMenuItem === 'export'}
+                        <ExportData />
+
                     {:else if activeMenuItem === 'about'}
                         <div class="text-center mx-auto">
                             <div class="flex items-center justify-center gap-6 mb-2">
@@ -217,7 +224,7 @@
                     {/if}
                 </div>
 
-                {#if activeMenuItem !== 'about'}
+                {#if activeMenuItem === 'display'}
                     <div class="modal-action justify-end">
                         <button
                             class="btn btn-primary"

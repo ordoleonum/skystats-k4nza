@@ -27,7 +27,14 @@ func updateAircraftDatabase(pg *postgres) {
 	}
 
 	var response Response
-	json.Unmarshal(responseData, &response)
+	if err := json.Unmarshal(responseData, &response); err != nil {
+		log.Error().Err(err).Msg("Unable to parse feeder aircraft.json")
+		return
+	}
+	if response.Now == 0 {
+		// partial or empty file (e.g. readsb restarting) - nothing to record
+		return
+	}
 
 	response.TrimFlightStrings()
 
@@ -77,9 +84,42 @@ func getDistance(aircraft []float64) *float64 {
 	return &distance
 }
 
+// K4NZA: database calls on the 2-second ingest path get a deadline, so a stuck
+// query can never block recording forever.
+const ingestQueryTimeout = 30 * time.Second
+
+// K4NZA: an aircraft that is still in view is written to the database at most
+// once per this interval, unless something we record changed (new maximum
+// altitude/speed, callsign appeared). The stock code rewrote every visible
+// aircraft every 2 seconds, which on PostgreSQL means a new row version plus
+// index entries each time - a large, constant write load on the SD card.
+const aircraftWriteInterval = 30 * time.Second
+
+var lastCacheSweep time.Time
+
+// sweepAircraftCache removes expired entries. The stock code never deleted
+// anything from this map, so it grew with every aircraft ever seen.
+func (pg *postgres) sweepAircraftCache(now time.Time) {
+	if now.Sub(lastCacheSweep) < time.Minute {
+		return
+	}
+	lastCacheSweep = now
+	for hex, entry := range pg.recentAircraftCache {
+		if now.After(entry.expiresAt) {
+			delete(pg.recentAircraftCache, hex)
+		}
+	}
+}
+
 func (pg *postgres) updateDatabase(nowEpoch float64, aircrafts []Aircraft) {
 
+	pg.sweepAircraftCache(time.Now())
+
 	existingAircrafts := getAircraftsRecentlySeen(pg, nowEpoch, aircrafts)
+	if existingAircrafts == nil {
+		// lookup failed - skip this cycle rather than inserting duplicates
+		return
+	}
 
 	if len(existingAircrafts) > 0 {
 		updateExistingAircrafts(pg, nowEpoch, aircrafts, existingAircrafts)
@@ -132,9 +172,12 @@ func getAircraftsRecentlySeen(pg *postgres, nowEpoch float64, aircrafts []Aircra
 		ORDER BY hex, last_seen DESC;
 	`
 
-	rows, err := pg.db.Query(context.Background(), query, uncachedHexes, recentThreshold)
+	ctx, cancel := context.WithTimeout(context.Background(), ingestQueryTimeout)
+	defer cancel()
+
+	rows, err := pg.db.Query(ctx, query, uncachedHexes, recentThreshold)
 	if err != nil {
-		fmt.Println("getAircraftsRecentlySeen() - Error querying db: ", err)
+		log.Error().Err(err).Msg("getAircraftsRecentlySeen() - error querying db, skipping this cycle")
 		return nil
 	}
 	defer rows.Close()
@@ -160,8 +203,9 @@ func getAircraftsRecentlySeen(pg *postgres, nowEpoch float64, aircrafts []Aircra
 		}
 
 		pg.recentAircraftCache[a.Hex] = &aircraftCacheEntry{
-			aircraft:  a,
-			expiresAt: newExpiry,
+			aircraft:    a,
+			expiresAt:   newExpiry,
+			lastWritten: time.Unix(int64(a.LastSeenEpoch), 0),
 		}
 		existingAircrafts[a.Hex] = &pg.recentAircraftCache[a.Hex].aircraft
 	}
@@ -282,10 +326,17 @@ func insertNewAircrafts(pg *postgres, nowEpoch float64, existingAircrafts map[st
 		}
 	}
 
-	br := pg.db.SendBatch(context.Background(), batch)
+	if batch.Len() == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ingestQueryTimeout)
+	defer cancel()
+
+	br := pg.db.SendBatch(ctx, batch)
 	defer br.Close()
 
-	for i := 0; i < len(aircraftsToInsert); i++ {
+	for i := 0; i < batch.Len(); i++ {
 		_, err := br.Exec()
 		if err != nil {
 			log.Error().Err(err).Msg("insertNewAircrafts() - unable to insert data")
@@ -303,10 +354,15 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 			continue
 		}
 
+		// K4NZA: track whether anything we keep as a record changed; if not,
+		// only write once per aircraftWriteInterval (see const above).
+		significantChange := false
+
 		// Update flight if null and found in subsequent messages
 		if existingAircraft.Flight == "" {
 			if aircraft.Flight != "" {
 				existingAircraft.Flight = aircraft.Flight
+				significantChange = true
 			}
 		}
 
@@ -320,9 +376,45 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 		lastSeenDistance := getDistance([]float64{aircraft.Lon, aircraft.Lat})
 		existingAircraft.LastSeenDistance = sql.NullFloat64{Float64: *lastSeenDistance, Valid: true}
 
+		// Update barometric altitude & geometric altitudes if higher than already stored
+		if existingAircraft.AltBaro < aircraft.AltBaro {
+			existingAircraft.AltBaro = aircraft.AltBaro
+			significantChange = true
+		}
+		if existingAircraft.AltGeom < aircraft.AltGeom {
+			existingAircraft.AltGeom = aircraft.AltGeom
+			significantChange = true
+		}
+
+		// Update ground speed, indicated air speed, and true air speed if higher than already stored
+		if existingAircraft.Gs < aircraft.Gs {
+			existingAircraft.Gs = aircraft.Gs
+			significantChange = true
+		}
+		if existingAircraft.Ias < aircraft.Ias {
+			existingAircraft.Ias = aircraft.Ias
+			significantChange = true
+		}
+		if existingAircraft.Tas < aircraft.Tas {
+			existingAircraft.Tas = aircraft.Tas
+			significantChange = true
+		}
+
+		// Update track (kept in memory, written with the next flush)
+		existingAircraft.Track = aircraft.Track
+
+		cacheEntry := pg.recentAircraftCache[aircraft.Hex]
+		if cacheEntry != nil && !significantChange &&
+			time.Since(cacheEntry.lastWritten) < aircraftWriteInterval {
+			continue
+		}
+		if cacheEntry != nil {
+			cacheEntry.lastWritten = time.Now()
+		}
+
 		// Update destination distance
 		if aircraft.Flight != "" {
-			routeData, err := getRouteData(pg, aircraft.Flight)
+			routeData, err := getRouteDataCached(pg, aircraft.Flight)
 			if err != nil {
 			} else if routeData != nil && routeData.DestinationLatitude.Valid && routeData.DestinationLongitude.Valid {
 				destinationDistance := getDestinationDistance(
@@ -334,27 +426,6 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 			}
 		}
 
-		// Update track
-		existingAircraft.Track = aircraft.Track
-
-		// Update barometric altitude & geometric altitudes if higher than already stored
-		if existingAircraft.AltBaro < aircraft.AltBaro {
-			existingAircraft.AltBaro = aircraft.AltBaro
-		}
-		if existingAircraft.AltGeom < aircraft.AltGeom {
-			existingAircraft.AltGeom = aircraft.AltGeom
-		}
-
-		// Update ground speed, indicated air speed, and true air speed if higher than already stored
-		if existingAircraft.Gs < aircraft.Gs {
-			existingAircraft.Gs = aircraft.Gs
-		}
-		if existingAircraft.Ias < aircraft.Ias {
-			existingAircraft.Ias = aircraft.Ias
-		}
-		if existingAircraft.Tas < aircraft.Tas {
-			existingAircraft.Tas = aircraft.Tas
-		}
 
 		updateStatement := `UPDATE aircraft_data
 							SET last_seen = $1,
@@ -391,10 +462,19 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 		)
 	}
 
-	br := pg.db.SendBatch(context.Background(), batch)
+	if batch.Len() == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), ingestQueryTimeout)
+	defer cancel()
+
+	br := pg.db.SendBatch(ctx, batch)
 	defer br.Close()
 
-	for i := 0; i < len(existingAircrafts); i++ {
+	// K4NZA: was len(existingAircrafts), which can differ from the number of
+	// queued statements now that unchanged aircraft are skipped
+	for i := 0; i < batch.Len(); i++ {
 		_, err := br.Exec()
 		if err != nil {
 			log.Error().Err(err).Msg("updateExistingAircrafts() - unable to update data")
@@ -422,6 +502,37 @@ type RouteData struct {
 	DestinationLongitude sql.NullFloat64
 }
 
+// K4NZA: destination lookups used to run one SQL query per visible aircraft
+// every 2 seconds. Cache them in memory for 10 minutes.
+type routeCacheEntry struct {
+	route     *RouteData
+	expiresAt time.Time
+}
+
+var routeCache = map[string]routeCacheEntry{}
+var lastRouteCacheSweep time.Time
+
+func getRouteDataCached(pg *postgres, flight string) (*RouteData, error) {
+	now := time.Now()
+	if now.Sub(lastRouteCacheSweep) > 5*time.Minute {
+		lastRouteCacheSweep = now
+		for k, v := range routeCache {
+			if now.After(v.expiresAt) {
+				delete(routeCache, k)
+			}
+		}
+	}
+	if entry, ok := routeCache[flight]; ok && now.Before(entry.expiresAt) {
+		return entry.route, nil
+	}
+	route, err := getRouteData(pg, flight)
+	if err != nil {
+		return nil, err
+	}
+	routeCache[flight] = routeCacheEntry{route: route, expiresAt: now.Add(10 * time.Minute)}
+	return route, nil
+}
+
 func getRouteData(pg *postgres, flight string) (*RouteData, error) {
 	if flight == "" {
 		return nil, nil
@@ -437,7 +548,10 @@ func getRouteData(pg *postgres, flight string) (*RouteData, error) {
 		LIMIT 1
 	`
 
-	err := pg.db.QueryRow(context.Background(), query, flight).Scan(
+	ctx, cancel := context.WithTimeout(context.Background(), ingestQueryTimeout)
+	defer cancel()
+
+	err := pg.db.QueryRow(ctx, query, flight).Scan(
 		&route.DestinationLatitude,
 		&route.DestinationLongitude,
 	)

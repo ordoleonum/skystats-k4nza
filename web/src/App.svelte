@@ -1,5 +1,5 @@
 <script>
-  import { IconSettings } from '@tabler/icons-svelte';
+  import { IconSettings, IconDownload } from '@tabler/icons-svelte';
   import ThemeSelector from './components/ThemeSelector.svelte';
   import AboveTimeline from './components/AboveTimeline.svelte';
   import TabRouteStats from './components/TabRouteStats.svelte';
@@ -32,6 +32,12 @@
       document.getElementById("settings-modal").showModal();
   }
 
+  // K4NZA: one-click access to data export
+  function openExport() {
+      window.dispatchEvent(new Event('skystats-open-export'));
+      document.getElementById("settings-modal").showModal();
+  }
+
 </script>
 
 
@@ -58,12 +64,20 @@
     <div class="mr-4">
       <ThemeSelector/>
     </div>
-    <button
-        class="btn btn-ghost btn-circle"
-        on:click={() => openSettingsModal()}
-    >
-        <IconSettings class="h-5 w-5" />
-    </button>
+    <div class="tooltip tooltip-bottom" data-tip="Download your recorded data (CSV / ZIP)">
+      <button class="btn btn-ghost btn-sm gap-1 mr-1" on:click={openExport} aria-label="Export data">
+          <IconDownload class="h-5 w-5" /><span class="hidden sm:inline">Export</span>
+      </button>
+    </div>
+    <div class="tooltip tooltip-bottom" data-tip="Display settings and about">
+      <button
+          class="btn btn-ghost btn-circle"
+          on:click={() => openSettingsModal()}
+          aria-label="Settings"
+      >
+          <IconSettings class="h-5 w-5" />
+      </button>
+    </div>
     <!-- <button class="btn btn-ghost btn-circle">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /> </svg>
     </button>

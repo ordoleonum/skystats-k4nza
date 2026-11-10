@@ -55,7 +55,8 @@ func unprocessedRoutes(pg *postgres) []Aircraft {
 			hex != '' AND
 			flight != '' AND
 			route_processed = false
-		ORDER BY first_seen ASC`
+		ORDER BY first_seen ASC
+		LIMIT 100`
 
 	rows, err := pg.db.Query(context.Background(), query)
 

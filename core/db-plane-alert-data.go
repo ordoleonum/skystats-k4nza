@@ -4,10 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 
 	"github.com/jackc/pgx/v5"
@@ -49,10 +48,12 @@ func UpsertPlaneAlertDb(pg *postgres) error {
 
 	needsUpdating, commitHash, err := checkForUpdates(pg, isCustomPlaneAlertUrl)
 	if err != nil {
-		log.Warn().Msgf("Error checking for updates: %v", err)
-		log.Warn().Msg("Updating despite error checking.")
-		needsUpdating = true
-		commitHash = "failed_to_get_commit_hash"
+		// K4NZA: we only get here when reference data already exists (an empty
+		// table returns needsUpdating=true without calling GitHub). Keep the
+		// data we have and try again on the next daily refresh, instead of
+		// re-downloading the whole CSV on every restart.
+		log.Warn().Msgf("Could not check plane-alert-db for updates, keeping existing data: %v", err)
+		return nil
 	}
 
 	if !needsUpdating {
@@ -67,11 +68,21 @@ func UpsertPlaneAlertDb(pg *postgres) error {
 		return err
 	}
 
+	if len(planeAlertRecords) < 2 {
+		return fmt.Errorf("plane-alert-db CSV is empty")
+	}
+
 	headers := getHeaderMap(planeAlertRecords[0])
+	numColumns := len(planeAlertRecords[0])
 
 	data := map[string]*Row{}
 
 	for _, record := range planeAlertRecords[1:] {
+
+		// K4NZA: skip malformed rows instead of panicking on an index error
+		if len(record) < numColumns {
+			continue
+		}
 
 		icao := record[headers["$ICAO"]]
 		if icao == "" {
@@ -163,13 +174,13 @@ func UpsertPlaneAlertDb(pg *postgres) error {
 }
 
 func fetchCSVData(url string) ([][]string, error) {
-	resp, err := http.Get(url)
+	body, err := httpGetBytes(remoteHTTPClient, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error retrieving the CSV for plane-alert-db: %w", err)
 	}
-	defer resp.Body.Close()
 
-	reader := csv.NewReader(resp.Body)
+	reader := csv.NewReader(bytes.NewReader(body))
+	reader.FieldsPerRecord = -1
 	records, err := reader.ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("Error reading CSV records for plane-alert-db: %w", err)
@@ -234,18 +245,10 @@ func checkForUpdates(pg *postgres, isCustom bool) (needsUpdating bool, commitHas
 }
 
 func getLatestCommitHash() (string, error) {
-	resp, err := http.Get("https://api.github.com/repos/sdr-enthusiasts/plane-alert-db/contents/")
+	body, err := httpGetBytes(remoteHTTPClient, "https://api.github.com/repos/sdr-enthusiasts/plane-alert-db/contents/",
+		map[string]string{"Accept": "application/vnd.github+json"})
 	if err != nil {
 		return "", fmt.Errorf("Error retrieving latest commit hash for plane-alert-db: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("Error reading response body for latest commit hash for plane-alert-db: %w", err)
-	}
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("Error when getting hash for plane-alert-db-images.csv: github api returned http code: %s", resp.Status)
 	}
 
 	var commitResponse GitHubAPIResponse
