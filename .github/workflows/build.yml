@@ -5,6 +5,9 @@ on:
     branches:
       - "main"
       - "test"
+    # K4NZA: documentation-only changes don't need a new container
+    paths-ignore:
+      - "**.md"
     tags:
       - "v*.*.*"
   pull_request:
