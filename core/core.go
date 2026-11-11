@@ -130,7 +130,9 @@ func main() {
 	// so one bad record cannot take the whole program down.
 	go backgroundLoop(pg)
 
-	ingestTicker := time.NewTicker(2 * time.Second)
+	// K4NZA: every 5 s instead of 2 s - aircraft stay in view for minutes, so
+	// nothing is missed, and it means less CPU and fewer database writes.
+	ingestTicker := time.NewTicker(ingestInterval)
 	defer ingestTicker.Stop()
 	for range ingestTicker.C {
 		runSafely("update aircraft", func() { updateAircraftDatabase(pg) })

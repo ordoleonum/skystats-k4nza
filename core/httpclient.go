@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	// short timeout for the local readsb feed, polled every 2s
+	// short timeout for the local readsb feed, polled every few seconds
 	localHTTPClient = &http.Client{Timeout: 5 * time.Second}
 	// longer timeout for internet APIs (adsbdb, GitHub, plane-alert-db CSV)
 	remoteHTTPClient = &http.Client{Timeout: 30 * time.Second}

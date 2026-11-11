@@ -35,6 +35,7 @@ func getRetentionDays() int {
 
 func runMaintenance(pg *postgres) {
 	logDatabaseSize(pg)
+	weeklyVacuum(pg)
 
 	days := getRetentionDays()
 	if days == 0 {
@@ -123,4 +124,33 @@ func ensureK4nzaIndexes(pg *postgres) {
 		}
 		cancel()
 	}
+}
+
+// weeklyVacuum runs VACUUM (ANALYZE) on the whole database at most once a week.
+// Autovacuum already runs, but on a small, busy table it can fall behind;
+// this reclaims space from old row versions and refreshes the planner's
+// statistics so queries stay fast as the data grows. Unlike VACUUM FULL it
+// does not lock tables or rewrite them (which would be hard on the SD card).
+func weeklyVacuum(pg *postgres) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	var days float64
+	err := pg.db.QueryRow(ctx, `
+		SELECT COALESCE(EXTRACT(EPOCH FROM NOW() - MAX(last_vacuum)) / 86400, 9999)
+		FROM pg_stat_user_tables`).Scan(&days)
+	cancel()
+	if err != nil {
+		log.Error().Err(err).Msg("maintenance: could not check last vacuum")
+		return
+	}
+	if days < 7 {
+		return
+	}
+	start := time.Now()
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	if _, err := pg.db.Exec(ctx, "VACUUM (ANALYZE)"); err != nil {
+		log.Error().Err(err).Msg("maintenance: weekly vacuum failed")
+		return
+	}
+	log.Info().Msgf("maintenance: weekly database tidy-up done in %s", time.Since(start).Round(time.Second))
 }

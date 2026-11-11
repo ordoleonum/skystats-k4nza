@@ -112,6 +112,9 @@ func getDistance(aircraft []float64) *float64 {
 // query can never block recording forever.
 const ingestQueryTimeout = 30 * time.Second
 
+// how often readsb's aircraft.json is read and recorded
+const ingestInterval = 5 * time.Second
+
 // K4NZA: an aircraft that is still in view is written to the database at most
 // once per this interval, unless something we record changed (new maximum
 // altitude/speed, callsign appeared). The stock code rewrote every visible
