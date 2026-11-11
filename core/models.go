@@ -47,7 +47,7 @@ type Aircraft struct {
 	Tisb                []any   `json:"tisb"`
 	Messages            int     `json:"messages"`
 	Seen                float64 `json:"seen"`
-	Rssi                int     `json:"rssi"`
+	Rssi                float64 `json:"rssi"`
 	DbFlags             int     `json:"dbFlags"`
 	Squawk              string  `json:"squawk"`
 	Category            string  `json:"category"`

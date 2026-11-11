@@ -33,6 +33,14 @@ jobs:
         echo "iso_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
     - name: Checkout
       uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - name: Go vet and tests
+      run: |
+        go vet ./core
+        go test ./core
     - name: Docker meta
       id: docker_meta
       uses: docker/metadata-action@v4

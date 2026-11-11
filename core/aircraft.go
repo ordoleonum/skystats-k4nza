@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -26,8 +27,8 @@ func updateAircraftDatabase(pg *postgres) {
 		return
 	}
 
-	var response Response
-	if err := json.Unmarshal(responseData, &response); err != nil {
+	response, err := parseAircraftJSON(responseData)
+	if err != nil {
 		log.Error().Err(err).Msg("Unable to parse feeder aircraft.json")
 		return
 	}
@@ -578,4 +579,31 @@ func getDestinationDistance(currentLat, currentLon, destLat, destLon float64) fl
 
 	distance := ruler.Distance(currentLoc, destLoc)
 	return math.Round(distance*100) / 100
+}
+
+// logTypeMismatch reports an aircraft.json field whose type differs from the
+// model at most once per hour, so the log isn't flooded every 2 seconds.
+var lastTypeMismatchLog time.Time
+
+func logTypeMismatch(err *json.UnmarshalTypeError) {
+	if time.Since(lastTypeMismatchLog) < time.Hour {
+		return
+	}
+	lastTypeMismatchLog = time.Now()
+	log.Debug().Str("field", err.Field).Str("value", err.Value).Msg("aircraft.json field type differs from model; field skipped")
+}
+
+// parseAircraftJSON decodes readsb's aircraft.json. A field with an unexpected
+// type (e.g. alt_baro "ground") only skips that one field - encoding/json still
+// fills in everything else - so that is not an error. Only invalid JSON is.
+func parseAircraftJSON(data []byte) (Response, error) {
+	var response Response
+	if err := json.Unmarshal(data, &response); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if !errors.As(err, &typeErr) {
+			return response, err
+		}
+		logTypeMismatch(typeErr)
+	}
+	return response, nil
 }
