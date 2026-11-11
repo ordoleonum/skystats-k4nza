@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -40,6 +41,8 @@ func updateAircraftDatabase(pg *postgres) {
 	response.TrimFlightStrings()
 
 	loc := []float64{getLon(), getLat()}
+	ruler := getRuler()
+	radius := getRadius()
 
 	var aircraftsInRange []Aircraft
 
@@ -52,9 +55,9 @@ func updateAircraftDatabase(pg *postgres) {
 
 		// Filter out aircraft not within radius
 		planeLoc := []float64{aircraft.Lon, aircraft.Lat}
-		distance := getRuler().Distance(loc, planeLoc)
+		distance := ruler.Distance(loc, planeLoc)
 
-		if distance < getRadius() {
+		if distance < radius {
 			aircraftsInRange = append(aircraftsInRange, aircraft)
 		}
 
@@ -69,14 +72,34 @@ func isNonAircraft(aircraft Aircraft) bool {
 		aircraft.Squawk == "7777"
 }
 
-func getRuler() *cheapruler.CheapRuler {
-	ruler, err := cheapruler.NewCheapruler(getLat(), "kilometers")
-	if err != nil {
-		fmt.Println("Error creating ruler: ", err)
-		return nil
-	}
+// K4NZA: the station position, radius and distance calculator never change
+// while running, so work them out once instead of for every aircraft on every
+// 2-second pass.
+var (
+	stationOnce   sync.Once
+	stationLat    float64
+	stationLon    float64
+	stationRadius float64
+	stationRuler  *cheapruler.CheapRuler
+)
 
-	return &ruler
+func loadStation() {
+	stationOnce.Do(func() {
+		stationLat, _ = strconv.ParseFloat(os.Getenv("LAT"), 64)
+		stationLon, _ = strconv.ParseFloat(os.Getenv("LON"), 64)
+		stationRadius, _ = strconv.ParseFloat(os.Getenv("RADIUS"), 64)
+		ruler, err := cheapruler.NewCheapruler(stationLat, "kilometers")
+		if err != nil {
+			fmt.Println("Error creating ruler: ", err)
+			return
+		}
+		stationRuler = &ruler
+	})
+}
+
+func getRuler() *cheapruler.CheapRuler {
+	loadStation()
+	return stationRuler
 }
 
 func getDistance(aircraft []float64) *float64 {
@@ -115,6 +138,11 @@ func (pg *postgres) sweepAircraftCache(now time.Time) {
 func (pg *postgres) updateDatabase(nowEpoch float64, aircrafts []Aircraft) {
 
 	pg.sweepAircraftCache(time.Now())
+
+	if len(aircrafts) == 0 {
+		// nothing in range: no database work needed this pass
+		return
+	}
 
 	existingAircrafts := getAircraftsRecentlySeen(pg, nowEpoch, aircrafts)
 	if existingAircrafts == nil {
@@ -484,18 +512,18 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 }
 
 func getLat() float64 {
-	lat, _ := strconv.ParseFloat(os.Getenv("LAT"), 64)
-	return lat
+	loadStation()
+	return stationLat
 }
 
 func getLon() float64 {
-	lon, _ := strconv.ParseFloat(os.Getenv("LON"), 64)
-	return lon
+	loadStation()
+	return stationLon
 }
 
 func getRadius() float64 {
-	radius, _ := strconv.ParseFloat(os.Getenv("RADIUS"), 64)
-	return radius
+	loadStation()
+	return stationRadius
 }
 
 type RouteData struct {
