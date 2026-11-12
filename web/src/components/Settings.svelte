@@ -84,7 +84,7 @@
 </script>
 
 <dialog id="settings-modal" class="modal">
-    <div class="modal-box w-11/12 max-w-5xl h-[680px] p-0 relative">
+    <div class="modal-box w-11/12 max-w-5xl h-[min(1000px,92vh)] max-h-[92vh] p-0 relative">
         <form method="dialog" class="absolute right-2 top-2 z-10">
             <button class="btn btn-md btn-circle btn-ghost text-2xl">✕</button>
         </form>
