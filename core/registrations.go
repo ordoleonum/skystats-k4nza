@@ -32,8 +32,8 @@ func updateRegistrations(pg *postgres) {
 		registration, err := getRegistration(aircraft)
 
 		if err != nil {
-			// K4NZA: stop this round on the first failure (adsbdb down or rate
-			// limiting) instead of waiting out up to 50 timeouts in a row.
+			// stop this round on the first failure (adsbdb down or rate
+			// limiting) instead of waiting out many timeouts in a row
 			log.Warn().Err(err).Msg("Error fetching registration for " + aircraft.Hex + " - will retry later")
 			break
 		}
@@ -120,8 +120,8 @@ func getRegistration(aircraft Aircraft) (*RegistrationInfo, error) {
 	url := "https://api.adsbdb.com/v0/aircraft/"
 	url += aircraft.Hex
 
-	// K4NZA: timeout + body close via httpGetBytes. A 404 means adsbdb does not
-	// know this aircraft (treated as "no registration", as before). Any other
+	// A 404 means adsbdb does not know this aircraft (treated as "no
+	// registration"). Any other
 	// error (rate limit, server error, network) is returned so the aircraft
 	// stays unprocessed and is retried later instead of being marked empty.
 	data, err := httpGetBytes(remoteHTTPClient, url, nil)

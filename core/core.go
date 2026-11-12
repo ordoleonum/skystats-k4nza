@@ -87,12 +87,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info().Msg("Checking K4NZA performance indexes")
+	log.Info().Msg("Checking performance indexes")
 	ensureK4nzaIndexes(pg)
 
-	// K4NZA: a failed plane-alert-db download (no internet, GitHub rate limit)
-	// used to exit the program, which put the container into a restart loop.
-	// Now it is logged and retried by the daily refresh in the background loop.
+	// A failed plane-alert-db download (no internet, GitHub rate limit) is
+	// logged and retried by the daily refresh in the background loop.
 	log.Info().Msg("Checking if interesting aircraft reference data needs updating from plane-alert-db")
 	if err := UpsertPlaneAlertDb(pg); err != nil {
 		log.Warn().Msgf("Could not update interesting aircraft data (will retry later): %v", err)
@@ -123,15 +122,14 @@ func main() {
 		pg.Close()
 	}()
 
-	// K4NZA: the stock code ran everything from one loop, so a slow call to
-	// adsbdb / adsb.im / GitHub, or a slow statistics query, stopped aircraft
-	// from being recorded. Recording now has its own loop; everything else
-	// runs in a background loop. Every task is also protected against panics
+	// Recording has its own loop, so a slow call to adsbdb / GitHub or a slow
+	// statistics query can't stop aircraft from being recorded. Everything
+	// else runs in a background loop. Every task is protected against panics
 	// so one bad record cannot take the whole program down.
 	go backgroundLoop(pg)
 
-	// K4NZA: every 5 s instead of 2 s - aircraft stay in view for minutes, so
-	// nothing is missed, and it means less CPU and fewer database writes.
+	// Aircraft stay in view for minutes, so polling every few seconds misses
+	// nothing while keeping CPU use and database writes low.
 	ingestTicker := time.NewTicker(ingestInterval)
 	defer ingestTicker.Stop()
 	for range ingestTicker.C {

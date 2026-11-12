@@ -1,6 +1,6 @@
 package main
 
-// K4NZA: easy data export.
+// Data export.
 //
 //   GET /api/export/summary                 -> JSON: what can be exported (row counts, date range, DB size)
 //   GET /api/export/csv/:dataset?from&to&tz -> one dataset as CSV (opens in Excel / Google Sheets)

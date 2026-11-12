@@ -121,7 +121,7 @@ func (s *APIServer) Start() {
 			stats.GET("/charts/aircraft/month", func(c *gin.Context) { s.getChartAircraftOverTime(c, "month") })
 			stats.GET("/charts/aircraft/day", func(c *gin.Context) { s.getChartAircraftOverTime(c, "day") })
 
-			// K4NZA: reception charts (stats-reception.go)
+			// reception charts (stats-reception.go)
 			stats.GET("/reception/range/:period", s.getReceptionRange)
 			stats.GET("/reception/signal/:period", s.getReceptionSignal)
 
@@ -138,7 +138,7 @@ func (s *APIServer) Start() {
 
 		api.GET("/version", s.getVersion)
 
-		// K4NZA: data export
+		// data export
 		export := api.Group("/export")
 		{
 			export.GET("/summary", s.exportSummary)

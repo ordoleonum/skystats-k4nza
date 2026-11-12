@@ -72,9 +72,8 @@ func isNonAircraft(aircraft Aircraft) bool {
 		aircraft.Squawk == "7777"
 }
 
-// K4NZA: the station position, radius and distance calculator never change
-// while running, so work them out once instead of for every aircraft on every
-// 2-second pass.
+// The station position, radius and distance calculator never change while
+// running, so they are worked out once.
 var (
 	stationOnce   sync.Once
 	stationLat    float64
@@ -108,24 +107,23 @@ func getDistance(aircraft []float64) *float64 {
 	return &distance
 }
 
-// K4NZA: database calls on the 2-second ingest path get a deadline, so a stuck
-// query can never block recording forever.
+// Database calls on the ingest path get a deadline, so a stuck query can
+// never block recording.
 const ingestQueryTimeout = 30 * time.Second
 
 // how often readsb's aircraft.json is read and recorded
 const ingestInterval = 5 * time.Second
 
-// K4NZA: an aircraft that is still in view is written to the database at most
-// once per this interval, unless something we record changed (new maximum
-// altitude/speed, callsign appeared). The stock code rewrote every visible
-// aircraft every 2 seconds, which on PostgreSQL means a new row version plus
-// index entries each time - a large, constant write load on the SD card.
+// An aircraft that is still in view is written to the database at most once
+// per this interval, unless something recorded changed (new maximum
+// altitude/speed, callsign appeared). Every UPDATE creates a new row version
+// plus index entries, so this keeps SD card writes low.
 const aircraftWriteInterval = 30 * time.Second
 
 var lastCacheSweep time.Time
 
-// sweepAircraftCache removes expired entries. The stock code never deleted
-// anything from this map, so it grew with every aircraft ever seen.
+// sweepAircraftCache removes expired entries so the cache doesn't grow with
+// every aircraft ever seen.
 func (pg *postgres) sweepAircraftCache(now time.Time) {
 	if now.Sub(lastCacheSweep) < time.Minute {
 		return
@@ -386,8 +384,8 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 			continue
 		}
 
-		// K4NZA: track whether anything we keep as a record changed; if not,
-		// only write once per aircraftWriteInterval (see const above).
+		// Track whether anything kept as a record changed; if not, only write
+		// once per aircraftWriteInterval.
 		significantChange := false
 
 		// Update flight if null and found in subsequent messages
@@ -504,8 +502,7 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 	br := pg.db.SendBatch(ctx, batch)
 	defer br.Close()
 
-	// K4NZA: was len(existingAircrafts), which can differ from the number of
-	// queued statements now that unchanged aircraft are skipped
+	// unchanged aircraft are skipped, so read exactly as many results as were queued
 	for i := 0; i < batch.Len(); i++ {
 		_, err := br.Exec()
 		if err != nil {
@@ -534,8 +531,8 @@ type RouteData struct {
 	DestinationLongitude sql.NullFloat64
 }
 
-// K4NZA: destination lookups used to run one SQL query per visible aircraft
-// every 2 seconds. Cache them in memory for 10 minutes.
+// Destination lookups are cached in memory for 10 minutes instead of running
+// one query per visible aircraft on every pass.
 type routeCacheEntry struct {
 	route     *RouteData
 	expiresAt time.Time
@@ -613,7 +610,7 @@ func getDestinationDistance(currentLat, currentLon, destLat, destLon float64) fl
 }
 
 // logTypeMismatch reports an aircraft.json field whose type differs from the
-// model at most once per hour, so the log isn't flooded every 2 seconds.
+// model at most once per hour, so the log isn't flooded on every pass.
 var lastTypeMismatchLog time.Time
 
 func logTypeMismatch(err *json.UnmarshalTypeError) {

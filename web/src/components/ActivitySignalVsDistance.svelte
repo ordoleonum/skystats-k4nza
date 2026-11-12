@@ -1,6 +1,6 @@
 <script>
 // @ts-nocheck
-    // K4NZA: signal strength (RSSI) against distance, with the median per 10 nm.
+    // Signal strength (RSSI) against distance, with the median per 10 nm.
     import { onMount, onDestroy } from 'svelte';
     import { themeChanged } from '../lib/themeStore.js';
     import {

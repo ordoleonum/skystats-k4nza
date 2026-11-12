@@ -1,9 +1,7 @@
 package main
 
-// K4NZA stability: every outbound HTTP request goes through a client with a
-// hard timeout. The stock code used http.Get (no timeout), so one hung request
-// to readsb, adsbdb or GitHub could freeze the main loop forever - SkyStats
-// would keep running but silently stop recording aircraft.
+// Every outbound HTTP request goes through a client with a hard timeout, so
+// one hung request to readsb, adsbdb or GitHub can't freeze recording.
 
 import (
 	"fmt"

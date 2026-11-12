@@ -5,7 +5,7 @@ on:
     branches:
       - "main"
       - "test"
-    # K4NZA: documentation-only changes don't need a new container
+    # documentation-only changes don't need a new container
     paths-ignore:
       - "**.md"
     tags:
@@ -25,7 +25,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     permissions:
-      contents: read   # K4NZA: needed to check out a private repo
+      contents: read   # needed to check out a private repo
       packages: write
     steps:
     - name: Set variables useful for later

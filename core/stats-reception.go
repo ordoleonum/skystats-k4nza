@@ -1,6 +1,6 @@
 package main
 
-// K4NZA: reception charts for the Activity tab.
+// Reception charts for the Activity tab.
 //
 //   GET /api/stats/reception/range/:period   (day | week | month | all)
 //   GET /api/stats/reception/signal/:period  (day | week | month)

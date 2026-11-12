@@ -78,7 +78,7 @@
     onMount(() => {
         settings.load();
         fetchVersion();
-        // K4NZA: the navbar "Export" button opens this dialog on the export page
+        // the navbar "Export" button opens this dialog on the export page
         window.addEventListener('skystats-open-export', () => { activeMenuItem = 'export'; });
     });
 </script>

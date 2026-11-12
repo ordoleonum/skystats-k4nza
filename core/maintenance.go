@@ -1,10 +1,9 @@
 package main
 
-// K4NZA: hourly housekeeping.
+// Hourly housekeeping.
 //
 //   - Optional data retention: set RETENTION_DAYS (e.g. 365) to delete flight
-//     rows older than that. 0 or unset keeps everything forever (stock
-//     behaviour). Record holders (fastest/slowest/highest/lowest) and the
+//     rows older than that. 0 or unset keeps everything forever. Record holders (fastest/slowest/highest/lowest) and the
 //     interesting-aircraft log are always kept.
 //   - Logs the database size so growth is visible in the container log.
 //
@@ -93,12 +92,9 @@ func logDatabaseSize(pg *postgres) {
 }
 
 // ensureK4nzaIndexes creates small partial indexes for the background jobs
-// that look for "not yet processed" rows every 30 s - 5 min. Without them those
-// lookups read the entire (ever-growing) flight table, so SkyStats became
-// slower and heavier on the SD card the longer it ran.
-//
-// These are applied here with IF NOT EXISTS rather than as a numbered
-// migration so they can never collide with future upstream migrations.
+// that look for "not yet processed" rows every 30 s - 5 min, so those lookups
+// don't read the entire (ever-growing) flight table. They are created with
+// IF NOT EXISTS rather than as a numbered migration.
 func ensureK4nzaIndexes(pg *postgres) {
 	statements := []string{
 		`CREATE INDEX IF NOT EXISTS idx_k4nza_unprocessed_registration
@@ -120,7 +116,7 @@ func ensureK4nzaIndexes(pg *postgres) {
 	for _, stmt := range statements {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		if _, err := pg.db.Exec(ctx, stmt); err != nil {
-			log.Warn().Err(err).Msg("Could not create K4NZA index (SkyStats still works, just slower)")
+			log.Warn().Err(err).Msg("Could not create performance index (SkyStats still works, just slower)")
 		}
 		cancel()
 	}

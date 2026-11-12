@@ -1,6 +1,6 @@
 <script>
 // @ts-nocheck
-    // K4NZA: farthest aircraft heard in each 10° slice around the antenna.
+    // Farthest aircraft heard in each 10° slice around the antenna.
     import { onMount, onDestroy } from 'svelte';
     import { themeChanged } from '../lib/themeStore.js';
     import {

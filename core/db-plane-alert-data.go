@@ -48,10 +48,9 @@ func UpsertPlaneAlertDb(pg *postgres) error {
 
 	needsUpdating, commitHash, err := checkForUpdates(pg, isCustomPlaneAlertUrl)
 	if err != nil {
-		// K4NZA: we only get here when reference data already exists (an empty
-		// table returns needsUpdating=true without calling GitHub). Keep the
-		// data we have and try again on the next daily refresh, instead of
-		// re-downloading the whole CSV on every restart.
+		// Only reached when reference data already exists (an empty table
+		// returns needsUpdating=true without calling GitHub). Keep the data we
+		// have and try again on the next daily refresh.
 		log.Warn().Msgf("Could not check plane-alert-db for updates, keeping existing data: %v", err)
 		return nil
 	}
@@ -79,7 +78,7 @@ func UpsertPlaneAlertDb(pg *postgres) error {
 
 	for _, record := range planeAlertRecords[1:] {
 
-		// K4NZA: skip malformed rows instead of panicking on an index error
+		// skip malformed rows
 		if len(record) < numColumns {
 			continue
 		}

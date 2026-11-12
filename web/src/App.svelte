@@ -32,7 +32,7 @@
       document.getElementById("settings-modal").showModal();
   }
 
-  // K4NZA: one-click access to data export
+  // one-click access to data export
   function openExport() {
       window.dispatchEvent(new Event('skystats-open-export'));
       document.getElementById("settings-modal").showModal();

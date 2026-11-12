@@ -1,6 +1,4 @@
 <script>
-  // K4NZA: dropped the flight-count charts (they duplicated the aircraft
-  // charts almost exactly) and added two reception charts.
   import ActivityAircraftByPeriod from "./ActivityAircraftByPeriod.svelte";
   import MetricAircraftSeen from "./MetricAircraftSeen.svelte";
   import MetricFlightsSeen from "./MetricFlightsSeen.svelte";

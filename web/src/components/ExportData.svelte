@@ -1,5 +1,5 @@
 <script>
-    // K4NZA: easy data export panel.
+    // Data export panel.
     import { onMount } from 'svelte';
     import { IconDownload, IconFileZip, IconInfoCircle } from '@tabler/icons-svelte';
 
