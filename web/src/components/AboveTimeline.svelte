@@ -3,6 +3,8 @@
     import NumberFlow from "@number-flow/svelte";
     import { IconPlane, IconPlaneDeparture, IconPlaneArrival } from "@tabler/icons-svelte";
     import Status from "./Status.svelte";
+    import { units } from "../stores/units";
+    import { fromKm, formatDistanceKm, distanceLabel } from "../lib/units";
 
     let endpoint = "api/stats/above";
 
@@ -258,10 +260,10 @@
                         </div>
                         <div class="timeline-end text-xs sm:text-sm">
                             <NumberFlow
-                                value={Number.parseFloat(
+                                value={Math.round(fromKm(Number.parseFloat(
                                     aircraft.last_seen_distance,
-                                ).toFixed(0)}
-                                suffix=" km"
+                                ), $units))}
+                                suffix={" " + distanceLabel[$units]}
                                 willChange={true}
                                 respectMotionPreference={false}
                             />
@@ -279,7 +281,7 @@
                         <div class="timeline-middle opacity-20">
                             <IconPlane size={24} />
                         </div>
-                        <div class="timeline-end invisible">0 km</div>
+                        <div class="timeline-end invisible">0 {distanceLabel[$units]}</div>
                         <hr />
                     </li>
                 {/if}
@@ -309,7 +311,7 @@
                         <path d="M12.5 3a17 17 0 0 1 0 18" />
                     </svg>
                 </div>
-                <div class="timeline-end text-xs sm:text-sm">20km+</div>
+                <div class="timeline-end text-xs sm:text-sm">{formatDistanceKm(20, $units, 0).replace(' ', '')}+</div>
                 <!-- <hr /> -->
             </li>
             <!-- End Far-->
@@ -352,7 +354,7 @@
                     </div>
                 </div>
             </div>
-            <div class="text-right text-xs italic">{selectedAircraft.remainingDistance}km remaining<br>
+            <div class="text-right text-xs italic">{formatDistanceKm(selectedAircraft.remainingDistance, $units)} remaining<br>
                 (estimated)</div>
             <div class="grid grid-cols-1 md:grid-cols-2 mt-6 gap-6">
                 <!--image-->
@@ -402,8 +404,8 @@
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-3">
                                 <div>
                                 <p class="font-bold uppercase tracking-wider">Progress</p>
-                                    <p class="mt-2"><span class="text-sm font-semibold uppercase">Origin:</span> {selectedAircraft.traveledDistance}km</p>
-                                    <p><span class="text-sm font-semibold uppercase">Destination:</span> {selectedAircraft.remainingDistance}km</p>
+                                    <p class="mt-2"><span class="text-sm font-semibold uppercase">Origin:</span> {formatDistanceKm(selectedAircraft.traveledDistance, $units)}</p>
+                                    <p><span class="text-sm font-semibold uppercase">Destination:</span> {formatDistanceKm(selectedAircraft.remainingDistance, $units)}</p>
                                 </div>
                                 <div class="radial-progress bg-base-300" style="--value:{selectedAircraft.progressPercent}" aria-valuenow={selectedAircraft.progressPercent} role="progressbar">{selectedAircraft.progressPercent}%</div>
                             </div>

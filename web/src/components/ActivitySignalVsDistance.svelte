@@ -1,8 +1,11 @@
 <script>
 // @ts-nocheck
-    // Signal strength (RSSI) against distance, with the median per 10 nm.
+    // Signal strength (RSSI) against distance, with the median per 10 nm
+    // (distances are converted to the chosen units for display).
     import { onMount, onDestroy } from 'svelte';
     import { themeChanged } from '../lib/themeStore.js';
+    import { units } from '../stores/units';
+    import { fromNm, round, distanceLabel } from '../lib/units';
     import {
         Chart,
         ScatterController,
@@ -82,7 +85,9 @@
         const text = daisyColor('bg-base-content');
         const grid = withAlpha(text, 0.12);
 
-        const maxX = Math.max(50, Math.ceil(Math.max(...data.points.map(p => p[0])) / 25) * 25);
+        const u = distanceLabel[$units];
+        const dx = (nm) => round(fromNm(nm, $units), 1);
+        const maxX = Math.max(50, Math.ceil(Math.max(...data.points.map(p => dx(p[0]))) / 25) * 25);
 
         if (chart) chart.destroy();
         chart = new Chart(canvas, {
@@ -91,7 +96,7 @@
                 datasets: [
                     {
                         label: 'Aircraft',
-                        data: data.points.map(p => ({ x: p[0], y: p[1] })),
+                        data: data.points.map(p => ({ x: dx(p[0]), y: p[1] })),
                         backgroundColor: withAlpha(primary, 0.45),
                         pointRadius: 2.5,
                         pointHoverRadius: 4,
@@ -100,7 +105,7 @@
                     {
                         type: 'line',
                         label: 'Median',
-                        data: data.median.map(p => ({ x: p[0], y: p[1] })),
+                        data: data.median.map(p => ({ x: dx(p[0]), y: p[1] })),
                         borderColor: text,
                         borderWidth: 2,
                         pointRadius: 0,
@@ -131,8 +136,8 @@
                         filter: item => item.dataset.label !== 'Overload',
                         callbacks: {
                             label: item => item.dataset.label === 'Median'
-                                ? `Median around ${item.raw.x} nm: ${item.raw.y} dB`
-                                : `${item.raw.x} nm, ${item.raw.y} dB`
+                                ? `Median around ${item.raw.x} ${u}: ${item.raw.y} dB`
+                                : `${item.raw.x} ${u}, ${item.raw.y} dB`
                         }
                     }
                 },
@@ -144,7 +149,7 @@
                         grid: { color: grid },
                         ticks: { color: text },
                         border: { color: text },
-                        title: { display: true, text: 'Distance (nm)', color: text }
+                        title: { display: true, text: `Distance (${u})`, color: text }
                     },
                     y: {
                         max: 0,
@@ -159,7 +164,7 @@
         });
     }
 
-    $: if (!loading && data && canvas) setTimeout(draw, 50);
+    $: if ($units && !loading && data && canvas) setTimeout(draw, 50);
 
     async function pick(key) {
         if (key === selected) return;

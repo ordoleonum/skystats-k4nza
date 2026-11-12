@@ -3,6 +3,13 @@
     import { settings } from '../stores/settings';
     import { IconBrandGithub } from '@tabler/icons-svelte';
     import ExportData from './ExportData.svelte';
+    import { units, setUnits } from '../stores/units';
+
+    const unitChoices = [
+        { id: 'nautical', label: 'Nautical', hint: 'nm, knots, feet' },
+        { id: 'imperial', label: 'Imperial', hint: 'miles, mph, feet' },
+        { id: 'metric', label: 'Metric', hint: 'km, km/h, metres' }
+    ];
 
 
     let activeMenuItem = 'display';
@@ -113,8 +120,27 @@
                     {#if activeMenuItem === 'display'}
                         <h4 class="text-lg font-semibold mb-6">Display Settings</h4>
 
+                        <!-- Units: applied straight away and remembered in this browser -->
+                        <div class="mb-6">
+                            <p class="text-xl font-extralight tracking-wider mb-4">Units</p>
+                            <p class="text-m text-base-content/70 mb-2">
+                                Distances, speeds and altitudes. Changes straight away and is remembered in this browser.
+                            </p>
+                            <div class="join">
+                                {#each unitChoices as u}
+                                    <button type="button"
+                                        class="btn join-item {$units === u.id ? 'btn-primary' : 'btn-outline'}"
+                                        title={u.hint}
+                                        on:click={() => setUnits(u.id)}>{u.label}</button>
+                                {/each}
+                            </div>
+                            <span class="ml-2 text-sm text-base-content/70">
+                                {unitChoices.find(u => u.id === $units)?.hint}
+                            </span>
+                        </div>
+
                         <form id="display-settings-form" class="space-y-6">
-                            
+
                             <!-- Route Table Display Settings -->
                             <div>
                                 <p class="text-xl font-extralight tracking-wider mb-4">Route Information</p>

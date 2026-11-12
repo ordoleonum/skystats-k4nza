@@ -137,6 +137,7 @@ func (s *APIServer) Start() {
 		}
 
 		api.GET("/version", s.getVersion)
+		api.GET("/config", s.getConfig)
 
 		// data export
 		export := api.Group("/export")
@@ -1446,6 +1447,18 @@ func (s *APIServer) getVersion(c *gin.Context) {
 		"commit":  commit,
 		"date":    date,
 	})
+}
+
+// getConfig tells the web page the feeder's display defaults. DEFAULT_UNITS is
+// "nautical", "imperial" or "metric"; anything else falls back to nautical.
+func (s *APIServer) getConfig(c *gin.Context) {
+	units := os.Getenv("DEFAULT_UNITS")
+	switch units {
+	case "nautical", "imperial", "metric":
+	default:
+		units = "nautical"
+	}
+	c.JSON(http.StatusOK, gin.H{"default_units": units})
 }
 
 func (s *APIServer) getLimit(settingKey ...string) int {

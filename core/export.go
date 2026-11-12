@@ -48,7 +48,10 @@ var exportDatasets = []exportDataset{
 				ro.airline_name, ro.origin_iata_code AS origin, ro.origin_name,
 				ro.destination_iata_code AS destination, ro.destination_name,
 				a.alt_baro AS max_altitude_ft, a.gs AS max_ground_speed_kt,
-				a.last_seen_distance AS last_distance_km, a.squawk, a.rssi
+				a.last_seen_distance AS last_distance_km,
+				ROUND(a.last_seen_distance / 1.609344, 2) AS last_distance_mi,
+				ROUND(a.last_seen_distance / 1.852, 2) AS last_distance_nm,
+				a.squawk, a.rssi
 			FROM aircraft_data a
 			LEFT JOIN registration_data rd ON rd.mode_s = a.hex
 			LEFT JOIN route_data ro ON ro.route_callsign = a.flight

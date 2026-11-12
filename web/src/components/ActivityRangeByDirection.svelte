@@ -3,6 +3,8 @@
     // Farthest aircraft heard in each 10° slice around the antenna.
     import { onMount, onDestroy } from 'svelte';
     import { themeChanged } from '../lib/themeStore.js';
+    import { units } from '../stores/units';
+    import { fromNm, round, distanceLabel } from '../lib/units';
     import {
         Chart,
         RadarController,
@@ -81,13 +83,15 @@
         const grid = withAlpha(text, 0.15);
         const step = data.sector_degrees;
         const labels = data.period.map((_, i) => compass[i * step] ?? '');
+        const u = distanceLabel[$units];
+        const conv = (arr) => arr.map(v => round(fromNm(v, $units), 1));
         const showAllTime = selected !== 'all';
 
         const datasets = [];
         if (showAllTime) {
             datasets.push({
                 label: 'All-time best',
-                data: data.all_time,
+                data: conv(data.all_time),
                 borderColor: withAlpha(text, 0.5),
                 borderDash: [4, 4],
                 borderWidth: 1.5,
@@ -98,7 +102,7 @@
         }
         datasets.push({
             label: periods.find(p => p.key === selected).label,
-            data: data.period,
+            data: conv(data.period),
             borderColor: primary,
             backgroundColor: withAlpha(primary, 0.2),
             borderWidth: 2,
@@ -122,7 +126,7 @@
                                 const from = items[0].dataIndex * step;
                                 return `${from}°–${from + step}°`;
                             },
-                            label: item => `${item.dataset.label}: ${item.raw} nm (${Math.round(item.raw * 1.852)} km)`
+                            label: item => `${item.dataset.label}: ${item.raw} ${u}`
                         }
                     }
                 },
@@ -136,7 +140,7 @@
                             color: text,
                             backdropColor: 'transparent',
                             maxTicksLimit: 5,
-                            callback: v => `${v} nm`
+                            callback: v => `${v} ${u}`
                         }
                     }
                 }
@@ -144,7 +148,7 @@
         });
     }
 
-    $: if (!loading && data && canvas) setTimeout(draw, 50);
+    $: if ($units && !loading && data && canvas) setTimeout(draw, 50);
 
     async function pick(key) {
         if (key === selected) return;
@@ -175,7 +179,7 @@
     </div>
     <div class="flex gap-4 text-xs opacity-70 mb-2 flex-wrap">
         <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-primary"></span>
-            Farthest heard{#if data && data.max_nm}{' '}(max {data.max_nm} nm){/if}</span>
+            Farthest heard{#if data && data.max_nm}{' '}(max {round(fromNm(data.max_nm, $units), 1)} {distanceLabel[$units]}){/if}</span>
         {#if selected !== 'all'}
             <span class="flex items-center gap-1"><span class="inline-block w-4 border-t-2 border-dashed border-base-content"></span>All-time best</span>
         {/if}

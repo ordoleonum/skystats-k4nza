@@ -1,15 +1,18 @@
 <script>
     import MotionStats from './MotionStats.svelte';
+    import { units } from '../stores/units';
+    import { formatAltitude } from '../lib/units';
     import { IconArrowDownDashed } from '@tabler/icons-svelte';
 
-    const columns = [
+    // rebuilt when the units change
+    $: columns = [
         { header: 'Reg', field: 'registration', class: 'font-mono' },
         { header: 'Model', field: 'type' },
         // { header: 'Flight', field: 'flight' },
         { 
             header: 'Altitude', 
             field: 'barometric_altitude',
-            formatter: (value) => value ? `${value.toLocaleString()} ft` : '-'
+            formatter: (value) => value ? formatAltitude(value, $units) : '-'
         },
         { 
             header: 'First Seen', 
