@@ -8,4 +8,5 @@
     title="Military Aircraft"
     icon={IconTank}
     aircraftType="mil"
+    description="Air force, army and navy aircraft, such as tankers, transports, fighters, trainers, patrol and surveillance planes, and military helicopters."
 />
