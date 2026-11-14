@@ -37,6 +37,8 @@ image includes. You don't install it on its own.
 - A **Search** tab (also opened by `?q=...`, which the feeder's Home page uses): find an
   aircraft by registration, hex code, callsign, type or operator; see every visit with route,
   closest distance, highest altitude and time in view, and download the visits as CSV.
+- The aircraft card shows a photo from planespotters.net (credited to the photographer) and
+  links to FlightAware.
 - The closest distance of every visit is recorded (`min_distance`).
 - API: `/api/search`, `/api/search/aircraft/:hex`, `/api/search/aircraft/:hex/visits.csv`.
 
