@@ -2,7 +2,7 @@
     // Aircraft search: registration, hex code, callsign, type or operator.
     // Opens directly with ?q=... (the feeder home page links here).
     import { onMount, tick } from 'svelte';
-    import { IconSearch, IconDownload, IconMap2, IconPhoto, IconArrowLeft, IconInfoCircle } from '@tabler/icons-svelte';
+    import { IconSearch, IconDownload, IconExternalLink, IconPhoto, IconArrowLeft, IconInfoCircle } from '@tabler/icons-svelte';
     import { units } from '../stores/units';
     import { formatDistanceKm, formatAltitude } from '../lib/units';
 
@@ -17,6 +17,7 @@
     let searchedFor = '';
 
     let detail = null; // one aircraft and its visits
+    let photo = null; // { src, link, photographer } for the open aircraft
     let detailLoading = false;
     let visitsMore = false;
     const PAGE = 25;
@@ -67,6 +68,7 @@
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || res.statusText);
             detail = { ...body, fromList };
+            loadPhoto(body);
             visitsMore = body.visits_list.length === PAGE && body.visits_in_history > PAGE;
             await tick();
             document.getElementById('search-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -75,6 +77,27 @@
         } finally {
             detailLoading = false;
         }
+    }
+
+    // Photo from planespotters.net (as on the aircraft card at the top of
+    // SkyStats), credited to the photographer; the registration lookup's photo
+    // is the fallback.
+    async function loadPhoto(d) {
+        photo = null;
+        const hex = d.hex;
+        let found = null;
+        try {
+            const res = await fetch(`https://api.planespotters.net/pub/photos/hex/${encodeURIComponent(hex)}`);
+            if (res.ok) {
+                const p = (await res.json()).photos?.[0];
+                const src = p?.thumbnail_large?.src || p?.thumbnail?.src;
+                if (src) found = { src, link: p.link, photographer: p.photographer };
+            }
+        } catch (e) { /* offline or blocked: try the fallback */ }
+        if (!found && d.photo_thumbnail) {
+            found = { src: d.photo_thumbnail, link: d.photo || d.photo_thumbnail, photographer: '' };
+        }
+        if (detail?.hex === hex) photo = found; // still the same aircraft
     }
 
     async function loadMoreVisits() {
@@ -122,9 +145,13 @@
         const o = airport(v.origin, v.origin_icao), d = airport(v.destination, v.destination_icao);
         return o && d ? `${o} to ${d}` : '–';
     }
-    // SkyStats runs on its own port; the live map is reached through the
-    // feeder's main page (which forwards /map/ to tar1090)
-    const mapLink = (hex) => `${window.location.protocol}//${window.location.hostname}/map/?icao=${encodeURIComponent(hex)}`;
+    // FlightAware, the same link the live map uses for a registration (the
+    // aircraft may not be in range now); by hex code when there's no registration
+    function flightAwareLink(d) {
+        const reg = (d.registration || '').trim();
+        if (reg) return `https://flightaware.com/live/flight/${encodeURIComponent(reg)}`;
+        return `https://flightaware.com/live/modes/${encodeURIComponent(d.hex.replace('~', ''))}/redirect`;
+    }
     const groupBadge = { Mil: 'Military', Gov: 'Government', Pol: 'Police', Civ: 'Civilian' };
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -236,13 +263,16 @@
                 </button>
             {/if}
             <div class="flex flex-col sm:flex-row gap-4 items-start">
-                {#if detail.photo_thumbnail}
-                    <a href={detail.photo || detail.photo_thumbnail} target="_blank" rel="noopener noreferrer" class="shrink-0">
-                        <img src={detail.photo_thumbnail} alt="Photo of {detail.registration}" class="w-36 h-24 object-cover rounded" loading="lazy" referrerpolicy="no-referrer" />
+                {#if photo}
+                    <a href={photo.link} target="_blank" rel="noopener noreferrer" class="relative shrink-0 block" title="Open the photo">
+                        <img src={photo.src} alt="Photo of {detail.registration || detail.hex.toUpperCase()}" class="w-48 h-32 object-cover rounded" loading="lazy" referrerpolicy="no-referrer" />
+                        {#if photo.photographer}
+                            <span class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">© {photo.photographer}</span>
+                        {/if}
                     </a>
                 {:else}
-                    <div class="w-36 h-24 rounded bg-base-200 flex items-center justify-center shrink-0 text-base-content/40">
-                        <IconPhoto class="w-8 h-8" />
+                    <div class="w-48 h-32 rounded bg-base-200 flex flex-col items-center justify-center shrink-0 text-base-content/40 text-xs gap-1">
+                        <IconPhoto class="w-8 h-8" />No photo available
                     </div>
                 {/if}
                 <div class="min-w-0">
@@ -261,14 +291,9 @@
                         {#if detail.owner_country}· registered in {detail.owner_country}{/if}
                     </p>
                     <div class="flex flex-wrap gap-3 mt-2 text-sm">
-                        <a class="link link-primary inline-flex items-center gap-1" href={mapLink(detail.hex)} target="_blank" rel="noopener">
-                            <IconMap2 class="w-4 h-4" /> Open on live map
+                        <a class="link link-primary inline-flex items-center gap-1" href={flightAwareLink(detail)} target="_blank" rel="noopener noreferrer">
+                            <IconExternalLink class="w-4 h-4" /> View on FlightAware
                         </a>
-                        {#if detail.photo}
-                            <a class="link link-primary inline-flex items-center gap-1" href={detail.photo} target="_blank" rel="noopener noreferrer">
-                                <IconPhoto class="w-4 h-4" /> Photo
-                            </a>
-                        {/if}
                         {#if detail.interesting?.link}
                             <a class="link link-primary" href={detail.interesting.link} target="_blank" rel="noopener noreferrer">More about this aircraft</a>
                         {/if}
