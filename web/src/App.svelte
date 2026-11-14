@@ -1,22 +1,25 @@
 <script>
-  import { IconSettings, IconDownload } from '@tabler/icons-svelte';
+  import { IconSettings, IconDownload, IconSearch } from '@tabler/icons-svelte';
   import ThemeSelector from './components/ThemeSelector.svelte';
   import AboveTimeline from './components/AboveTimeline.svelte';
   import TabRouteStats from './components/TabRouteStats.svelte';
   import TabMotionStats from './components/TabMotionStats.svelte';
   import TabInterestingStats from './components/TabInterestingStats.svelte';
   import TabActivity from './components/TabActivity.svelte';
+  import TabSearch from './components/TabSearch.svelte';
   import Footer from './components/Footer.svelte';
   import Settings from './components/Settings.svelte';
 
-  let activeTab = 'activity';
+  // ?q=... (e.g. from the feeder home page) opens the Search tab
+  let activeTab = new URLSearchParams(window.location.search).get('q') ? 'search' : 'activity';
   let tabsElement;
 
   const tabs = [
     { name: 'activity', label: 'Activity', component: TabActivity },
     { name: 'route-stat', label: 'Route Information', component: TabRouteStats },
     { name: 'interesting-stat', label: 'Interesting Aircraft', component: TabInterestingStats },
-    { name: 'motion-stat', label: 'Record Holders', component: TabMotionStats }
+    { name: 'motion-stat', label: 'Record Holders', component: TabMotionStats },
+    { name: 'search', label: 'Search', component: TabSearch }
   ];
 
   function setActiveTab(tabName) {
@@ -30,6 +33,11 @@
 
   function openSettingsModal() {
       document.getElementById("settings-modal").showModal();
+  }
+
+  function openSearch() {
+      setActiveTab('search');
+      window.dispatchEvent(new Event('skystats-open-search'));
   }
 
   // one-click access to data export
@@ -63,6 +71,11 @@
   <div class="navbar-end">
     <div class="mr-4">
       <ThemeSelector/>
+    </div>
+    <div class="tooltip tooltip-bottom" data-tip="Search for an aircraft">
+      <button class="btn btn-ghost btn-sm gap-1 mr-1" on:click={openSearch} aria-label="Search">
+          <IconSearch class="h-5 w-5" /><span class="hidden sm:inline">Search</span>
+      </button>
     </div>
     <div class="tooltip tooltip-bottom" data-tip="Download your recorded data (CSV / ZIP)">
       <button class="btn btn-ghost btn-sm gap-1 mr-1" on:click={openExport} aria-label="Export data">
@@ -104,7 +117,7 @@
                       'badge badge-lg badge-primary badge-outline'
                     }"
       on:click={() => setActiveTab(tab.name)}>
-      {tab.label}
+      {#if tab.name === 'search'}<IconSearch class="h-4 w-4 mr-1" />{/if}{tab.label}
       </button>
     {/each}
   </div>
