@@ -122,6 +122,9 @@
         const o = airport(v.origin, v.origin_icao), d = airport(v.destination, v.destination_icao);
         return o && d ? `${o} to ${d}` : '–';
     }
+    // SkyStats runs on its own port; the live map is reached through the
+    // feeder's main page (which forwards /map/ to tar1090)
+    const mapLink = (hex) => `${window.location.protocol}//${window.location.hostname}/map/?icao=${encodeURIComponent(hex)}`;
     const groupBadge = { Mil: 'Military', Gov: 'Government', Pol: 'Police', Civ: 'Civilian' };
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -258,7 +261,7 @@
                         {#if detail.owner_country}· registered in {detail.owner_country}{/if}
                     </p>
                     <div class="flex flex-wrap gap-3 mt-2 text-sm">
-                        <a class="link link-primary inline-flex items-center gap-1" href="../map/?icao={detail.hex}" target="_blank" rel="noopener">
+                        <a class="link link-primary inline-flex items-center gap-1" href={mapLink(detail.hex)} target="_blank" rel="noopener">
                             <IconMap2 class="w-4 h-4" /> Open on live map
                         </a>
                         {#if detail.photo}
