@@ -1,0 +1,125 @@
+package main
+
+// Tests that need no database: input checks and small calculations.
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+func TestParseSearchNormalises(t *testing.T) {
+	cases := []struct {
+		in, key, hex string
+		ok           bool
+	}{
+		{"N-812DN", "N812DN", "", true},
+		{"  n812dn ", "N812DN", "", true},
+		{"a1b2c3", "A1B2C3", "a1b2c3", true},
+		{"~1234ab", "~1234AB", "~1234ab", true},
+		{"DAL 1423", "DAL1423", "", true},
+		{"x", "", "", false},
+		{"-%_", "", "", false},
+		{"Delta Air Lines", "DELTAAIRLINES", "", true},
+	}
+	for _, c := range cases {
+		got, ok := parseSearch(c.in)
+		if ok != c.ok {
+			t.Errorf("parseSearch(%q) ok = %v, want %v", c.in, ok, c.ok)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if got.key != c.key || got.hex != c.hex {
+			t.Errorf("parseSearch(%q) = key %q hex %q, want %q %q", c.in, got.key, got.hex, c.key, c.hex)
+		}
+	}
+}
+
+func TestEscapeLike(t *testing.T) {
+	if got := escapeLike(`50%_off\`); got != `50\%\_off\\` {
+		t.Errorf("escapeLike = %q", got)
+	}
+}
+
+func TestValidHex(t *testing.T) {
+	for in, want := range map[string]bool{
+		"a1b2c3": true, "A1B2C3": true, "~a1b2c3": true,
+		"a1b2c": false, "a1b2c3d": false, "zzzzzz": false, "a1b2c3'": false,
+	} {
+		if _, ok := validHex(in); ok != want {
+			t.Errorf("validHex(%q) = %v, want %v", in, ok, want)
+		}
+	}
+}
+
+func TestSampleEvery(t *testing.T) {
+	for _, c := range []struct{ total, want, n int64 }{
+		{0, 2500, 1}, {2500, 2500, 1}, {2501, 2500, 2}, {10000, 2500, 4}, {10001, 2500, 5}, {5, 0, 1},
+	} {
+		if got := sampleEvery(c.total, c.want); got != c.n {
+			t.Errorf("sampleEvery(%d, %d) = %d, want %d", c.total, c.want, got, c.n)
+		}
+	}
+}
+
+func TestMinPositive(t *testing.T) {
+	for _, c := range []struct{ a, b, want float64 }{
+		{0, 5, 5}, {5, 0, 5}, {3, 5, 3}, {5, 3, 3}, {0, 0, 0},
+	} {
+		if got := minPositive(c.a, c.b); got != c.want {
+			t.Errorf("minPositive(%v, %v) = %v, want %v", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+func TestUtcDay(t *testing.T) {
+	loc := time.FixedZone("CST", -6*3600)
+	in := time.Date(2026, 11, 13, 21, 30, 0, 0, loc) // 03:30 UTC on the 14th
+	if got := utcDay(in); !got.Equal(time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("utcDay = %v", got)
+	}
+}
+
+func TestSameOriginWrites(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(sameOriginWrites)
+	r.Any("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	cases := []struct {
+		method  string
+		headers map[string]string
+		want    int
+	}{
+		{"GET", map[string]string{"Sec-Fetch-Site": "cross-site"}, 200},
+		{"PUT", map[string]string{"Sec-Fetch-Site": "same-origin"}, 200},
+		{"PUT", map[string]string{"Sec-Fetch-Site": "cross-site"}, 403},
+		{"PUT", map[string]string{"Sec-Fetch-Site": "same-site"}, 403},
+		{"POST", map[string]string{"Origin": "http://evil.example"}, 403},
+		{"POST", map[string]string{"Origin": "http://feeder.local"}, 200},
+		{"POST", map[string]string{}, 200}, // curl / scripts
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest(c.method, "http://feeder.local/x", nil)
+		for k, v := range c.headers {
+			req.Header.Set(k, v)
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != c.want {
+			t.Errorf("%s %v -> %d, want %d", c.method, c.headers, w.Code, c.want)
+		}
+	}
+}
+
+// Building the router panics if two routes conflict.
+func TestRoutesRegister(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &APIServer{}
+	s.registerRoutes(gin.New())
+}

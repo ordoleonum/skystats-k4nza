@@ -27,6 +27,21 @@ jobs:
     permissions:
       contents: read   # needed to check out a private repo
       packages: write
+    services:
+      # throwaway database for the database tests (core/k4nza_db_test.go)
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: skystats
+          POSTGRES_PASSWORD: skystats
+          POSTGRES_DB: skystats_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U skystats"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
     - name: Set variables useful for later
       id: useful_vars
@@ -41,9 +56,16 @@ jobs:
       with:
         go-version-file: go.mod
     - name: Go vet and tests
+      env:
+        SKYSTATS_DB_TESTS: "1"
+        DB_HOST: 127.0.0.1
+        DB_PORT: "5432"
+        DB_USER: skystats
+        DB_PASSWORD: skystats
+        DB_NAME: skystats_test
       run: |
         go vet ./core
-        go test ./core
+        go test -count=1 ./core
     - name: Docker meta
       id: docker_meta
       uses: docker/metadata-action@v4

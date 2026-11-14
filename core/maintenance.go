@@ -5,6 +5,7 @@ package main
 //   - Optional data retention: set RETENTION_DAYS (e.g. 365) to delete flight
 //     rows older than that. 0 or unset keeps everything forever. Record holders (fastest/slowest/highest/lowest) and the
 //     interesting-aircraft log are always kept.
+//     Only days already in the summary tables (k4nza-summary.go) are deleted.
 //   - Logs the database size so growth is visible in the container log.
 //
 // Deletes run in small batches with pauses so they never lock the table or
@@ -34,10 +35,24 @@ func getRetentionDays() int {
 
 func runMaintenance(pg *postgres) {
 	logDatabaseSize(pg)
+	// summarise finished days first, so the history limit below only ever
+	// deletes flights that are already counted in the all-time numbers
+	if tryRollup(pg) {
+		runRetention(pg)
+	}
 	weeklyVacuum(pg)
+}
 
+func runRetention(pg *postgres) {
 	days := getRetentionDays()
 	if days == 0 {
+		return
+	}
+	cctx, ccancel := context.WithTimeout(context.Background(), time.Minute)
+	rolledUpUntil, err := rollupCutoff(cctx, pg)
+	ccancel()
+	if err != nil {
+		log.Error().Err(err).Msg("maintenance: could not read summary position, skipping history limit")
 		return
 	}
 	// never accept a tiny value by accident
@@ -53,8 +68,9 @@ func runMaintenance(pg *postgres) {
 			WHERE id IN (
 				SELECT id FROM aircraft_data
 				WHERE last_seen < NOW() - make_interval(days => $1)
+				  AND first_seen < $3
 				LIMIT $2
-			)`, days, retentionBatchSize)
+			)`, days, retentionBatchSize, rolledUpUntil)
 		cancel()
 		if err != nil {
 			log.Error().Err(err).Msg("maintenance: retention delete failed")

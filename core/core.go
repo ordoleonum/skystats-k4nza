@@ -89,6 +89,7 @@ func main() {
 
 	log.Info().Msg("Checking performance indexes")
 	ensureK4nzaIndexes(pg)
+	ensureK4nzaSchema(pg)
 
 	// A failed plane-alert-db download (no internet, GitHub rate limit) is
 	// logged and retried by the daily refresh in the background loop.
@@ -127,6 +128,10 @@ func main() {
 	// else runs in a background loop. Every task is protected against panics
 	// so one bad record cannot take the whole program down.
 	go backgroundLoop(pg)
+
+	// summarise past days (the first time: the whole existing history) in
+	// the background, so start-up isn't delayed on a large database
+	go runSafely("summary rollup", func() { runRollup(pg) })
 
 	// Aircraft stay in view for minutes, so polling every few seconds misses
 	// nothing while keeping CPU use and database writes low.

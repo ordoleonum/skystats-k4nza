@@ -37,7 +37,7 @@ var exportDatasets = []exportDataset{
 	{
 		Key:         "flights",
 		Label:       "Flights (easy to read)",
-		Description: "One row per aircraft visit: times, callsign, registration, type, operator, route, max altitude/speed and distance.",
+		Description: "One row per aircraft visit: times, callsign, registration, type, operator, route, max altitude/speed, last and closest distance.",
 		dateColumn:  "a.first_seen",
 		query: `SELECT
 				a.first_seen, a.last_seen, a.hex AS icao_hex, a.flight AS callsign,
@@ -51,6 +51,9 @@ var exportDatasets = []exportDataset{
 				a.last_seen_distance AS last_distance_km,
 				ROUND(a.last_seen_distance / 1.609344, 2) AS last_distance_mi,
 				ROUND(a.last_seen_distance / 1.852, 2) AS last_distance_nm,
+				ROUND(LEAST(a.min_distance, a.last_seen_distance, NULLIF(a.r_dst, 0) * 1.852), 2) AS closest_km,
+				ROUND(LEAST(a.min_distance, a.last_seen_distance, NULLIF(a.r_dst, 0) * 1.852) / 1.609344, 2) AS closest_mi,
+				ROUND(LEAST(a.min_distance, a.last_seen_distance, NULLIF(a.r_dst, 0) * 1.852) / 1.852, 2) AS closest_nm,
 				a.squawk, a.rssi
 			FROM aircraft_data a
 			LEFT JOIN registration_data rd ON rd.mode_s = a.hex

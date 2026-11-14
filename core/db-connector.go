@@ -14,6 +14,7 @@ type aircraftCacheEntry struct {
 	aircraft    Aircraft
 	expiresAt   time.Time
 	lastWritten time.Time // last time this aircraft was written to the DB
+	pendingMin  float64   // closest distance (km) since the last write, 0 = none
 }
 
 type postgres struct {

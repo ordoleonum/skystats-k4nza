@@ -42,53 +42,32 @@ func receptionInterval(period string) (string, bool) {
 	return "", false
 }
 
-// The all-time outline scans the whole table, and it is drawn on every
-// range chart, so keep it in memory for a while.
+// The all-time outline is drawn on every range chart; it comes from the daily
+// summary table plus the not-yet-summarised days, kept in memory briefly.
 var (
 	rangeAllMu      sync.Mutex
 	rangeAllCache   []float64
 	rangeAllExpires time.Time
 )
 
-func (s *APIServer) queryRangeSectors(interval string) ([]float64, error) {
-	entryFilter, exitFilter := "", ""
-	if interval != "" {
-		entryFilter = `first_seen >= now() - INTERVAL '` + interval + `' AND`
-		exitFilter = `last_seen >= now() - INTERVAL '` + interval + `' AND`
+// receptionSince turns a period into the start time of the data shown.
+func receptionSince(interval string) time.Time {
+	now := time.Now()
+	switch interval {
+	case "1 day":
+		return now.Add(-24 * time.Hour)
+	case "7 days":
+		return now.AddDate(0, 0, -7)
+	case "1 month":
+		return now.AddDate(0, -1, 0)
 	}
+	return time.Time{}
+}
 
-	query := `
-		WITH pts AS (
-			SELECT r_dst::float8 AS nm, r_dir::float8 AS dir
-			FROM aircraft_data
-			WHERE ` + entryFilter + ` r_dst > 0 AND r_dir IS NOT NULL
-			UNION ALL
-			SELECT last_seen_distance::float8 / $3 AS nm,
-			       atan2d(
-			           sind(last_seen_lon::float8 - $2) * cosd(last_seen_lat::float8),
-			           cosd($1) * sind(last_seen_lat::float8)
-			             - sind($1) * cosd(last_seen_lat::float8) * cosd(last_seen_lon::float8 - $2)
-			       ) AS dir
-			FROM aircraft_data
-			WHERE ` + exitFilter + ` last_seen_distance > 0
-			  AND last_seen_lat IS NOT NULL AND last_seen_lon IS NOT NULL
-			  AND NOT (last_seen_lat = 0 AND last_seen_lon = 0)
-		)
-		SELECT floor(mod((dir + 360)::numeric, 360) / 10)::int AS sector, max(nm)
-		FROM pts
-		WHERE nm < $4
-		GROUP BY 1`
-
-	// Anything beyond the SkyStats radius is a bad position report.
-	maxNm := getRadius() / kmPerNm
-	if maxNm <= 0 {
-		maxNm = 1000
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	rows, err := s.pg.db.Query(ctx, query, getLat(), getLon(), kmPerNm, maxNm)
+// queryRangeSectorsBetween: farthest distance (nm) per sector for visits that
+// started in [from, to).
+func queryRangeSectorsBetween(ctx context.Context, pg *postgres, from, to time.Time) ([]float64, error) {
+	rows, err := pg.db.Query(ctx, rangeSectorsSQL, getLat(), getLon(), kmPerNm, maxPlausibleNm(), from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -108,18 +87,26 @@ func (s *APIServer) queryRangeSectors(interval string) ([]float64, error) {
 	return sectors, rows.Err()
 }
 
+func (s *APIServer) queryRangeSectors(interval string) ([]float64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return queryRangeSectorsBetween(ctx, s.pg, receptionSince(interval), time.Now().Add(24*time.Hour))
+}
+
 func (s *APIServer) getRangeAllTime() ([]float64, error) {
 	rangeAllMu.Lock()
 	defer rangeAllMu.Unlock()
 	if rangeAllCache != nil && time.Now().Before(rangeAllExpires) {
 		return rangeAllCache, nil
 	}
-	sectors, err := s.queryRangeSectors("")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	sectors, err := allTimeRangeSectors(ctx, s.pg)
 	if err != nil {
 		return nil, err
 	}
 	rangeAllCache = sectors
-	rangeAllExpires = time.Now().Add(15 * time.Minute)
+	rangeAllExpires = time.Now().Add(5 * time.Minute)
 	return sectors, nil
 }
 
@@ -170,21 +157,28 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 		return
 	}
 
-	maxNm := getRadius() / kmPerNm
-	if maxNm <= 0 {
-		maxNm = 1000
-	}
+	maxNm := maxPlausibleNm()
 
 	base := `FROM aircraft_data
-		WHERE first_seen >= now() - INTERVAL '` + interval + `'
+		WHERE first_seen >= $2
 		  AND r_dst > 0 AND r_dst < $1
 		  AND rssi IS NOT NULL AND rssi < 0 AND rssi > -60`
+	since := receptionSince(interval)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// An even sample of about signalSamplePoints visits: every n-th row by id.
+	// (ORDER BY random() would have to sort every row in the period first.)
+	var total int64
+	if err := s.pg.db.QueryRow(ctx, `SELECT COUNT(*) `+base, maxNm, since).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	every := sampleEvery(total, signalSamplePoints)
+
 	rows, err := s.pg.db.Query(ctx,
-		`SELECT r_dst::float8, rssi::float8 `+base+` ORDER BY random() LIMIT 2500`, maxNm)
+		`SELECT r_dst::float8, rssi::float8 `+base+` AND id % $3 = 0 LIMIT $4`, maxNm, since, every, signalSamplePoints)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -205,7 +199,7 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 		`SELECT floor(r_dst / 10)::int * 10 + 5 AS mid,
 		        percentile_cont(0.5) WITHIN GROUP (ORDER BY rssi::float8),
 		        count(*) `+base+`
-		 GROUP BY 1 HAVING count(*) >= 3 ORDER BY 1`, maxNm)
+		 GROUP BY 1 HAVING count(*) >= 3 ORDER BY 1`, maxNm, since)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -227,4 +221,15 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 		"points": points,
 		"median": median,
 	})
+}
+
+const signalSamplePoints = 2500
+
+// sampleEvery returns n so that taking every n-th row of total rows gives
+// about want rows.
+func sampleEvery(total int64, want int64) int64 {
+	if want <= 0 || total <= want {
+		return 1
+	}
+	return (total + want - 1) / want
 }

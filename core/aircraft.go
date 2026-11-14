@@ -302,11 +302,12 @@ func insertNewAircrafts(pg *postgres, nowEpoch float64, existingAircrafts map[st
 					messages,
 					seen,
 					rssi,
-					db_flags
+					db_flags,
+					min_distance
 				) VALUES (
 					$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
 					$16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
-					$29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43
+					$29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44
 				)`
 
 			batch.Queue(insertStatement,
@@ -352,7 +353,8 @@ func insertNewAircrafts(pg *postgres, nowEpoch float64, existingAircrafts map[st
 				aircraft.Messages,
 				aircraft.Seen,
 				aircraft.Rssi,
-				aircraft.DbFlags)
+				aircraft.DbFlags,
+				*lastSeenDistance)
 		}
 	}
 
@@ -406,6 +408,15 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 		lastSeenDistance := getDistance([]float64{aircraft.Lon, aircraft.Lat})
 		existingAircraft.LastSeenDistance = sql.NullFloat64{Float64: *lastSeenDistance, Valid: true}
 
+		// closest approach: remembered between writes, so the minimum isn't
+		// missed when the aircraft is only written every 30 s
+		cacheEntry := pg.recentAircraftCache[aircraft.Hex]
+		closest := *lastSeenDistance
+		if cacheEntry != nil {
+			cacheEntry.pendingMin = minPositive(cacheEntry.pendingMin, closest)
+			closest = cacheEntry.pendingMin
+		}
+
 		// Update barometric altitude & geometric altitudes if higher than already stored
 		if existingAircraft.AltBaro < aircraft.AltBaro {
 			existingAircraft.AltBaro = aircraft.AltBaro
@@ -433,13 +444,13 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 		// Update track (kept in memory, written with the next flush)
 		existingAircraft.Track = aircraft.Track
 
-		cacheEntry := pg.recentAircraftCache[aircraft.Hex]
 		if cacheEntry != nil && !significantChange &&
 			time.Since(cacheEntry.lastWritten) < aircraftWriteInterval {
 			continue
 		}
 		if cacheEntry != nil {
 			cacheEntry.lastWritten = time.Now()
+			cacheEntry.pendingMin = 0
 		}
 
 		// Update destination distance
@@ -470,7 +481,8 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 								gs = $10,
 								ias = $11,
 								tas = $12,
-								flight = $13
+								flight = $13,
+								min_distance = LEAST(min_distance, $15)
 							WHERE id = $14`
 
 		batch.Queue(
@@ -489,6 +501,7 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 			existingAircraft.Tas,
 			existingAircraft.Flight,
 			existingAircraft.Id,
+			closest,
 		)
 	}
 
@@ -634,4 +647,15 @@ func parseAircraftJSON(data []byte) (Response, error) {
 		logTypeMismatch(typeErr)
 	}
 	return response, nil
+}
+
+// minPositive returns the smaller of a and b, treating 0 as "no value yet".
+func minPositive(a, b float64) float64 {
+	if a <= 0 {
+		return b
+	}
+	if b <= 0 || a < b {
+		return a
+	}
+	return b
 }

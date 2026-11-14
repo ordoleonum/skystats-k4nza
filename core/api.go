@@ -61,18 +61,18 @@ func (s *APIServer) Start() {
 		r.Use(gin.Recovery())
 	}
 
-	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type")
+	s.registerRoutes(r)
+	r.Run("0.0.0.0:" + s.port)
+}
 
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(200)
-			return
-		}
-
-		c.Next()
-	})
+// registerRoutes sets up every route (separate from Start so tests can build
+// the same router).
+func (s *APIServer) registerRoutes(r *gin.Engine) {
+	// SkyStats is only used from its own page. Requests that change something
+	// and come from another site (any page open in a browser on the same
+	// network) are refused; no CORS headers are sent, so other sites can't
+	// read the data either.
+	r.Use(sameOriginWrites)
 
 	// API routes
 	api := r.Group("api")
@@ -139,6 +139,11 @@ func (s *APIServer) Start() {
 		api.GET("/version", s.getVersion)
 		api.GET("/config", s.getConfig)
 
+		// aircraft search
+		api.GET("/search", s.search)
+		api.GET("/search/aircraft/:hex", s.searchAircraft)
+		api.GET("/search/aircraft/:hex/visits.csv", s.searchAircraftCSV)
+
 		// data export
 		export := api.Group("/export")
 		{
@@ -151,25 +156,20 @@ func (s *APIServer) Start() {
 	// Serve static files
 	r.Static("/static", "../web")
 	r.StaticFile("/", "../web/index.html")
-
-	r.Run("0.0.0.0:" + s.port)
-
 }
 func (s *APIServer) getFlightsSeenMetrics(c *gin.Context) {
 	stats := gin.H{}
 
 	tz := s.getTimezone(c)
 
-	// Total flights count
-	var totalFlights int
-	err := s.pg.db.QueryRow(context.Background(), "SELECT COUNT(*) FROM aircraft_data").Scan(&totalFlights)
-	if err == nil {
+	// Total flights count (includes days removed by the history limit)
+	if totalFlights, _, _, err := s.allTimeTotalsCached(); err == nil {
 		stats["total_flights"] = totalFlights
 	}
 
 	// Today's flights count
 	var todayFlights int
-	err = s.pg.db.QueryRow(context.Background(),
+	err := s.pg.db.QueryRow(context.Background(),
 		"SELECT COUNT(*) FROM aircraft_data WHERE first_seen >= DATE_TRUNC('day', NOW(), $1)", tz).Scan(&todayFlights)
 	if err == nil {
 		stats["today_flights"] = todayFlights
@@ -192,16 +192,14 @@ func (s *APIServer) getAircraftSeenMetrics(c *gin.Context) {
 
 	tz := s.getTimezone(c)
 
-	// Total aircraft count
-	var totalAircraft int
-	err := s.pg.db.QueryRow(context.Background(), "SELECT COUNT(DISTINCT hex) FROM aircraft_data").Scan(&totalAircraft)
-	if err == nil {
+	// Total aircraft count (includes days removed by the history limit)
+	if _, totalAircraft, _, err := s.allTimeTotalsCached(); err == nil {
 		stats["total_aircraft"] = totalAircraft
 	}
 
 	// Today's aircraft count
 	var todayAircraft int
-	err = s.pg.db.QueryRow(context.Background(),
+	err := s.pg.db.QueryRow(context.Background(),
 		"SELECT COUNT(DISTINCT hex) FROM aircraft_data WHERE first_seen >= DATE_TRUNC('day', NOW(), $1)", tz).Scan(&todayAircraft)
 	if err == nil {
 		stats["today_aircraft"] = todayAircraft
@@ -222,20 +220,14 @@ func (s *APIServer) getRouteMetrics(c *gin.Context) {
 
 	stats := gin.H{}
 
-	// Total Routes
-	var total_routes int
-	err := s.pg.db.QueryRow(context.Background(),
-		`SELECT COUNT(*)
-			FROM aircraft_data a
-			INNER JOIN route_data r ON a.flight = r.route_callsign`).Scan(&total_routes)
-
-	if err == nil {
-		stats["total_routes"] = total_routes
+	// Total Routes (flights with a known route, including trimmed days)
+	if _, _, totalRoutes, err := s.allTimeTotalsCached(); err == nil {
+		stats["total_routes"] = totalRoutes
 	}
 
 	// Unique countries
 	var uniqueCountries int
-	err = s.pg.db.QueryRow(context.Background(),
+	err := s.pg.db.QueryRow(context.Background(),
 		`SELECT COUNT(*) 
 		FROM (
 			SELECT origin_country_name AS country FROM route_data
@@ -713,10 +705,32 @@ func (s *APIServer) getTopAircraftTypes(c *gin.Context, period string, flightora
 	}
 	innerFilter = `WHERE ` + timeFilter + ` t IS NOT NULL AND t != ''`
 
-	switch flightoraircraft {
-	case "aircraft":
-		innerQuery = `(SELECT t, hex FROM aircraft_data ` + innerFilter + `GROUP BY t, hex)`
-	case "flights":
+	var args []any
+	countExpr := "Count(t)"
+	switch {
+	case period == "all":
+		// whole history, including days removed by the history limit
+		w, err := rollupWatermark(context.Background(), s.pg.db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		args = append(args, w)
+		switch flightoraircraft {
+		case "aircraft":
+			innerQuery = `(WITH ` + allAircraftCTE + ` SELECT t, hex FROM allac WHERE t IS NOT NULL AND t != '') AS x`
+		case "flights":
+			innerQuery = `(SELECT t, visits AS n FROM k4nza_aircraft_seen WHERE t IS NOT NULL AND t != ''
+				UNION ALL
+				SELECT t, 1 FROM aircraft_data WHERE first_seen >= $1 AND t IS NOT NULL AND t != '') AS x`
+			countExpr = "SUM(n)"
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid flightoraircraft parameter. Use 'flights' or 'aircraft'"})
+			return
+		}
+	case flightoraircraft == "aircraft":
+		innerQuery = `(SELECT t, hex FROM aircraft_data ` + innerFilter + `GROUP BY t, hex) AS x`
+	case flightoraircraft == "flights":
 		innerQuery = `aircraft_data ` + innerFilter
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid flightoraircraft parameter. Use 'flights' or 'aircraft'"})
@@ -728,13 +742,13 @@ func (s *APIServer) getTopAircraftTypes(c *gin.Context, period string, flightora
 					count,
 					ROUND(count * 100.0 / SUM(count) OVER(), 0) as percentage
 				FROM (
-					SELECT t, Count(t) as count
+					SELECT t, ` + countExpr + `::bigint as count
 					FROM ` + innerQuery + `
 					GROUP BY t ORDER BY count DESC
 				) AS top_15
 				ORDER BY count DESC LIMIT 15`
 
-	rows, err := s.pg.db.Query(context.Background(), query)
+	rows, err := s.pg.db.Query(context.Background(), query, args...)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1541,15 +1555,9 @@ func (s *APIServer) getRecentSeenMetrics(c *gin.Context) {
 func (s *APIServer) getTotalSeenMetrics(c *gin.Context) {
 	stats := gin.H{}
 
-	var totalFlights int
-	err := s.pg.db.QueryRow(context.Background(),
-		"SELECT COUNT(*) FROM aircraft_data").Scan(&totalFlights)
-	if err == nil {
+	// both include days removed by the history limit
+	if totalFlights, totalAircraft, _, err := s.allTimeTotalsCached(); err == nil {
 		stats["total_flights"] = totalFlights
-	}
-
-	totalAircraft, err := s.cachedStats.GetCachedTotalAircraft()
-	if err == nil {
 		stats["total_aircraft"] = totalAircraft
 	}
 
