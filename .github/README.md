@@ -27,6 +27,22 @@ image includes. You don't install it on its own.
 - Small indexes so background jobs don't scan the whole flight history.
 - Hourly housekeeping, optional history limit (`RETENTION_DAYS`, 0 = keep forever) and a
   weekly `VACUUM (ANALYZE)`.
+- Every finished day is summarised into small tables (`k4nza_aircraft_seen`,
+  `k4nza_callsign_seen`, `k4nza_range_daily`) that the history limit never trims. All-time
+  totals, all-time top types and the all-time range outline come from them, so they stay
+  correct and fast. The history limit only deletes days that are already summarised.
+- Routes are looked up again after 18 hours instead of 1 (from wiedehopf's fork).
+
+**Search**
+- A **Search** tab (also opened by `?q=...`, which the feeder's Home page uses): find an
+  aircraft by registration, hex code, callsign, type or operator; see every visit with route,
+  closest distance, highest altitude and time in view, and download the visits as CSV.
+- The closest distance of every visit is recorded (`min_distance`).
+- API: `/api/search`, `/api/search/aircraft/:hex`, `/api/search/aircraft/:hex/visits.csv`.
+
+**Security**
+- Requests that change something are refused when the browser says they come from another
+  site, and no `Access-Control-Allow-Origin: *` header is sent any more.
 
 **Activity tab**
 - **Range by Direction**: the farthest aircraft heard in each 10° slice around the antenna, with
@@ -42,9 +58,13 @@ image includes. You don't install it on its own.
 
 ## Building
 
-Every push to `main` runs `go vet`, the tests, and builds a multi-architecture container,
+Every push to `main` runs `go vet`, the unit tests and the database tests (against a throwaway
+PostgreSQL started by the workflow), and builds a multi-architecture container,
 tagged `main`, `main-<sha>-<time>` and `sha-<short sha>`. The feeder pins one of these in
 its `docker.image.versions`.
+
+To run the database tests locally, point `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` and
+`DB_NAME` at an empty PostgreSQL database and run `SKYSTATS_DB_TESTS=1 go test ./core`.
 
 ## Credits
 
