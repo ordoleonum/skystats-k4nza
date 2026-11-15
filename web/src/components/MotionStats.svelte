@@ -2,6 +2,7 @@
 // @ts-nocheck
     import { onMount } from 'svelte';
     import { refreshRecordHolderData } from '../stores/settings';
+    import { searchFor } from '../lib/search';
 
     export let endpoint;
     export let title;
@@ -81,7 +82,9 @@
                             <tr>
                                 {#each columns as column}
                                     <td class={column.class || ''}>
-                                        {#if column.formatter}
+                                        {#if column.field === 'registration' && aircraft.registration}
+                                            <button type="button" class="link link-hover text-accent font-mono" title="Search your history for {aircraft.registration}" on:click={() => searchFor(aircraft.registration)}>{aircraft.registration}</button>
+                                        {:else if column.formatter}
                                             {@html column.formatter(aircraft[column.field])}
                                         {:else}
                                             {aircraft[column.field] || '-'}

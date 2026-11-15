@@ -163,7 +163,18 @@
         }
         const focus = () => setTimeout(() => inputEl?.focus(), 50);
         window.addEventListener('skystats-open-search', focus);
-        return () => window.removeEventListener('skystats-open-search', focus);
+        // a registration clicked in Interesting Aircraft / Record Holders:
+        // search the whole history for it
+        const searchFor = (e) => {
+            query = e.detail;
+            days = '0';
+            runSearch();
+        };
+        window.addEventListener('skystats-search-for', searchFor);
+        return () => {
+            window.removeEventListener('skystats-open-search', focus);
+            window.removeEventListener('skystats-search-for', searchFor);
+        };
     });
 </script>
 

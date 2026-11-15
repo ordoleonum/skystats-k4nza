@@ -1,6 +1,7 @@
 <script>
     import { onMount } from 'svelte'
     import { settings, refreshInterestingData } from '../stores/settings';
+    import { searchFor } from '../lib/search';
 
     export let endpoint;
     export let title;
@@ -106,7 +107,11 @@
                         <tbody>
                             {#each data as aircraft}
                             <tr class="hover:bg-base-300 cursor-pointer" on:click={() => showAircraftModal(aircraft)}>
-                                <td class="font-mono whitespace-nowrap">{aircraft.registration}</td>
+                                <td class="font-mono whitespace-nowrap">
+                                    {#if aircraft.registration}
+                                        <button type="button" class="link link-hover text-accent font-mono" title="Search your history for {aircraft.registration}" on:click|stopPropagation={() => searchFor(aircraft.registration)}>{aircraft.registration}</button>
+                                    {:else}-{/if}
+                                </td>
                                 <td>{aircraft.operator}</td>
                                 <td>{aircraft.type}</td>
                                 <td class="whitespace-nowrap">{aircraft.seen ? new Date(aircraft.seen).toLocaleString() : '-'}</td>

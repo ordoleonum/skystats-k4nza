@@ -40,6 +40,9 @@
       window.dispatchEvent(new Event('skystats-open-search'));
   }
 
+  // a registration clicked in another tab (lib/search.js); TabSearch runs the search
+  window.addEventListener('skystats-search-for', () => setActiveTab('search'));
+
   // one-click access to data export
   function openExport() {
       window.dispatchEvent(new Event('skystats-open-export'));
