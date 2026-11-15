@@ -149,6 +149,21 @@ alter user "skystats-user" password 'NEW_PASS';
 
 ## Screenshots
 
+### Aircraft search
+Search everything SkyStats has recorded by registration, hex code, callsign, type or operator.
+![Aircraft search](docs/screenshots/skystats-search.jpg)
+</br>
+
+### Reception charts
+Range by direction and signal vs distance, to spot blocked directions and too much gain.
+![Reception charts](docs/screenshots/skystats-activity.jpg)
+</br>
+
+### Export your data
+Download flights, interesting aircraft, records, registrations and routes as CSV files or one ZIP.
+![Export your data](docs/screenshots/skystats-export.jpg)
+</br>
+
 ### Home
 ![Home](docs/screenshots/1_Home.png)
 </br>
