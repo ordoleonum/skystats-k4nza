@@ -227,9 +227,9 @@
                     {:else if activeMenuItem === 'about'}
                         <div class="text-center mx-auto">
                             <div class="flex items-center justify-center gap-6 mb-2">
-                                <img src="/logo_icon.png" alt="Skystats Logo" class="w-32 h-32" />
-                                <h1 class="text-7xl font-normal text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-                                    Skystats
+                                <img src="/logo_icon.png" alt="SkyStats logo" class="w-20 h-20 sm:w-32 sm:h-32" />
+                                <h1 class="text-4xl sm:text-6xl font-normal text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+                                    SkyStats-K4NZA
                                 </h1>
                             </div>
                             <div class="mb-6 text-base-content/50">
@@ -239,12 +239,15 @@
                                     {version.version}
                                 {/if}
                             </div>
-                            <p class="mt-6 mb-6 text-sm text-base-content/50">
-                                Created by <a href="https://github.com/tomcarman" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-primary transition-colors">@tomcarman</a> with support from the SDR Enthusiasts community. Join us on <a href="https://discord.gg/znkBr2eyev" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-primary transition-colors">Discord</a>.
+                            <p class="mt-6 mb-2 text-sm text-base-content/50">
+                                The SkyStats build for the <a href="https://github.com/ordoleonum/adsb-feeder-k4nza-public" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-primary transition-colors">K4NZA ADS-B Feeder</a>: aircraft search, reception charts, export and long-term stability.
                             </p>
-                            <a href="https://github.com/tomcarman/skystats" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
+                            <p class="mb-6 text-sm text-base-content/50">
+                                Based on <a href="https://github.com/tomcarman/skystats" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-primary transition-colors">SkyStats</a> by <a href="https://github.com/tomcarman" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-primary transition-colors">@tomcarman</a>, created with support from the SDR Enthusiasts community (<a href="https://discord.gg/znkBr2eyev" target="_blank" rel="noopener noreferrer" class="text-accent hover:text-primary transition-colors">Discord</a>).
+                            </p>
+                            <a href="https://github.com/ordoleonum/skystats-k4nza" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
                                 <IconBrandGithub stroke={2} size={32} />
-                                <span>GitHub</span>
+                                <span>skystats-k4nza on GitHub</span>
                             </a>
                         </div>
                     {/if}

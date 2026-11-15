@@ -9,6 +9,14 @@
 </div>
 </br>
 
+> **SkyStats-K4NZA** is the SkyStats build that ships with the
+> [K4NZA ADS-B Feeder](https://github.com/ordoleonum/adsb-feeder-k4nza-public). It is based on
+> [SkyStats by Tom Carman](https://github.com/tomcarman/skystats) (via
+> [wiedehopf's fork](https://github.com/wiedehopf/skystats)) and adds aircraft search, reception
+> charts, export and long-term stability changes. Problems with this build go to
+> [this repository's issues](https://github.com/ordoleonum/skystats-k4nza/issues), not to the original project.
+> The container is published as `ghcr.io/ordoleonum/skystats-k4nza`.
+
 
 ## Overview
 

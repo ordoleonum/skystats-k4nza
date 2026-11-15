@@ -53,7 +53,7 @@
 
 
 <div class="navbar bg-base-100 shadow-sm">
-  <div class="navbar-start">
+  <div class="navbar-start hidden md:flex">
     <!-- <div class="dropdown">
       <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" /> </svg>
@@ -67,12 +67,12 @@
     </div> -->
   </div>
   <div class="navbar-center">
-    <h1 class="text-4xl font-normal text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-      Skystats
+    <h1 class="text-2xl md:text-3xl lg:text-4xl font-normal text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] leading-none text-center">
+      SkyStats<span class="hidden md:inline">-K4NZA</span><span class="block md:hidden text-xs tracking-[0.3em]">K4NZA</span>
     </h1>
   </div>
-  <div class="navbar-end">
-    <div class="mr-4">
+  <div class="navbar-end flex-1 md:flex-none">
+    <div class="mr-1 md:mr-4">
       <ThemeSelector/>
     </div>
     <div class="tooltip tooltip-bottom" data-tip="Search for an aircraft">
