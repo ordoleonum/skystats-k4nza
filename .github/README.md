@@ -9,6 +9,20 @@ It is based on [SkyStats by Tom Carman](https://github.com/tomcarman/skystats) a
 automatically into a container (`ghcr.io/ordoleonum/skystats-k4nza`) that the K4NZA feeder
 image includes. You don't install it on its own.
 
+## Screenshots
+
+**Aircraft search**: every visit of one aircraft, with a photo and a link to FlightAware.
+
+![Aircraft search](../docs/screenshots/skystats-search.jpg)
+
+**Reception charts**: range by direction and signal vs distance.
+
+![Reception charts](../docs/screenshots/skystats-activity.jpg)
+
+**Export**: download what SkyStats recorded as CSV files or one ZIP.
+
+![Export your data](../docs/screenshots/skystats-export.jpg)
+
 ## Changes in this build
 
 **Stability**
