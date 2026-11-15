@@ -15,15 +15,15 @@
     <MetricAircraftSeen />
   </div>
   <div class="col">
-    <ActivityAircraftByPeriod />
-  </div>
-  <div class="col">
-    <ActivityTopTypesByPeriod aircraftorflight="aircraft"/>
-  </div>
-  <div class="col">
     <ActivityRangeByDirection />
   </div>
   <div class="col">
     <ActivitySignalVsDistance />
+  </div>
+  <div class="col">
+    <ActivityAircraftByPeriod />
+  </div>
+  <div class="col">
+    <ActivityTopTypesByPeriod aircraftorflight="aircraft"/>
   </div>
 </div>
