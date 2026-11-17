@@ -215,4 +215,16 @@
     <p class="text-xs opacity-60 mt-3">
         A healthy band slopes down. Dots piled at the dashed line mean the gain is too high.
     </p>
+    <details class="text-sm mt-2">
+        <summary class="cursor-pointer opacity-80">How to read this chart</summary>
+        <ul class="list-disc ml-5 mt-2 space-y-1 opacity-80">
+            <li><b>Healthy:</b> a thick band running from the top left (close and strong) down to the bottom right (far and weak), with a smooth median line through it.</li>
+            <li><b>Gain too high:</b> many close aircraft sit on or above the dashed overload line and the top of the band looks flattened. Lower the gain a step.</li>
+            <li><b>Gain too low or a weak antenna:</b> the whole band sits low and thins out early, with few dots far away.</li>
+            <li><b>Band stops at a distance:</b> that is about where hills, buildings or the horizon block the signal. Compare with Range by Direction.</li>
+            <li><b>Wavy or stepped median:</b> only a few aircraft at those distances, so the median jumps around. Week or Month smooths it out.</li>
+            <li><b>Gaps:</b> no aircraft were heard at those distances in this period.</li>
+            <li><b>Weak dots close in:</b> usually low aircraft partly hidden from the antenna, or weak transponders. A few are normal.</li>
+        </ul>
+    </details>
 </div>
