@@ -1,13 +1,15 @@
 <script>
     import { onMount } from 'svelte'
     import { settings, refreshInterestingData } from '../stores/settings';
-    import { searchFor } from '../lib/search';
+    import { searchFor, searchGroup } from '../lib/search';
 
     export let endpoint;
     export let title;
     export let icon;
     export let aircraftType;
     export let description = '';
+    // plane-alert-db group (Mil, Gov, Pol, Civ): the header opens Search with all of them
+    export let group = '';
 
     let data = [];
     let loading = true;
@@ -75,7 +77,13 @@
                         <svelte:component this={icon} class="w-6 h-6 text-primary" />
                     </div>
                 {/if}
-                <h2 class="text-2xl font-extralight tracking-wider">{title}</h2>
+                {#if group}
+                    <h2 class="text-2xl font-extralight tracking-wider">
+                        <button type="button" class="link link-hover text-left" title="Search your history for every aircraft in this group" on:click={() => searchGroup(group)}>{title}</button>
+                    </h2>
+                {:else}
+                    <h2 class="text-2xl font-extralight tracking-wider">{title}</h2>
+                {/if}
                 </div>
                 {#if description}
                     <p class="text-sm opacity-70 mb-5">{description}</p>

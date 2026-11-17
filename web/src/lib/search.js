@@ -6,3 +6,10 @@ export function searchFor(text) {
     if (!q) return;
     window.dispatchEvent(new CustomEvent('skystats-search-for', { detail: q }));
 }
+
+// Opens the Search tab listing every aircraft of one interesting group ever
+// seen (group: Mil, Gov, Pol or Civ), e.g. from a group card header.
+export function searchGroup(group) {
+    if (!group) return;
+    window.dispatchEvent(new CustomEvent('skystats-search-for', { detail: { group } }));
+}

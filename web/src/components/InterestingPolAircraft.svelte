@@ -7,6 +7,7 @@
     endpoint='api/stats/interesting/police'
     title="Police Aircraft"
     icon={IconShield}
+    group="Pol"
     aircraftType="pol"
     description="Law-enforcement aircraft, such as police helicopters and planes from city, state and federal agencies."
 />

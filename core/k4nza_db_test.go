@@ -259,6 +259,28 @@ func TestSearch(t *testing.T) {
 		t.Errorf("c17 seen 3 days ago should not match days=1: %+v", res.Results)
 	}
 
+	// a whole interesting group
+	res = result{}
+	if code := getJSON(t, r, "/api/search?group=Mil", &res); code != 200 {
+		t.Errorf("group search: HTTP %d", code)
+	}
+	if len(res.Results) != 1 || res.Results[0].Hex != "ae1234" || res.Results[0].Group != "Mil" {
+		t.Errorf("group=Mil = %+v, want only ae1234", res.Results)
+	}
+	res = result{}
+	getJSON(t, r, "/api/search?group=Mil&days=1", &res)
+	if len(res.Results) != 0 {
+		t.Errorf("group=Mil&days=1 should be empty: %+v", res.Results)
+	}
+	res = result{}
+	getJSON(t, r, "/api/search?group=Civ", &res)
+	if len(res.Results) != 0 {
+		t.Errorf("group=Civ should be empty: %+v", res.Results)
+	}
+	if code := getJSON(t, r, "/api/search?group=Bad", nil); code != 400 {
+		t.Errorf("unknown group: HTTP %d, want 400", code)
+	}
+
 	var detail struct {
 		Visits    int64    `json:"visits"`
 		InHistory int64    `json:"visits_in_history"`

@@ -8,6 +8,8 @@
 
     let query = '';
     let days = '0';
+    let group = ''; // listing a whole interesting group (Mil, Gov, Pol, Civ) instead of a text search
+    let limit = 200;
     let inputEl;
 
     let loading = false;
@@ -26,12 +28,22 @@
     let seq = 0;
 
     function onInput() {
+        group = ''; // typing starts a normal search again
         clearTimeout(timer);
         timer = setTimeout(runSearch, 350);
     }
 
+    function clearGroup() {
+        group = '';
+        results = null;
+        detail = null;
+        updateUrl('');
+        inputEl?.focus();
+    }
+
     async function runSearch() {
         clearTimeout(timer);
+        if (group) return runGroup();
         const q = query.trim();
         updateUrl(q);
         if (q.replace(/[^a-z0-9]/gi, '').length < 2) {
@@ -50,6 +62,7 @@
             if (!res.ok) throw new Error(body.error || res.statusText);
             results = body.results;
             more = body.more;
+            limit = body.limit || 200;
             searchedFor = q;
             detail = null;
             if (results.length === 1) openAircraft(results[0].hex, false);
@@ -59,6 +72,64 @@
             if (mine === seq) loading = false;
         }
     }
+
+    // every aircraft of one interesting group ever seen
+    async function runGroup() {
+        const g = group;
+        query = '';
+        updateUrl('', g);
+        const mine = ++seq;
+        loading = true;
+        error = '';
+        try {
+            const res = await fetch(`api/search?group=${encodeURIComponent(g)}&days=${days}`);
+            const body = await res.json();
+            if (mine !== seq) return;
+            if (!res.ok) throw new Error(body.error || res.statusText);
+            results = body.results;
+            more = body.more;
+            limit = body.limit || 1000;
+            searchedFor = groupName[g] || g;
+            detail = null;
+        } catch (e) {
+            if (mine === seq) error = `Search failed: ${e.message}`;
+        } finally {
+            if (mine === seq) loading = false;
+        }
+    }
+
+    // ---------- sorting the results (click a column header) ----------
+    let sortKey = ''; // '' = as the server sent them (most recently seen first)
+    let sortDir = 1;
+    const sortValue = {
+        reg: (a) => (a.registration || a.hex).toUpperCase(),
+        operator: (a) => (a.operator || '').toUpperCase(),
+        type: (a) => (a.model ? `${a.model} (${a.type})` : (a.type || '')).toUpperCase(),
+        visits: (a) => a.visits,
+        last: (a) => new Date(a.last_seen).getTime() || 0
+    };
+    function sortBy(key) {
+        if (sortKey === key) {
+            sortDir = -sortDir;
+        } else {
+            sortKey = key;
+            // numbers and dates: biggest / newest first; text: A to Z
+            sortDir = key === 'visits' || key === 'last' ? -1 : 1;
+        }
+    }
+    function sorted(list, key, dir) {
+        if (!list || !key) return list || [];
+        const v = sortValue[key];
+        return [...list].sort((a, b) => {
+            const x = v(a), y = v(b);
+            // empty text always last
+            if (x === '' && y !== '') return 1;
+            if (y === '' && x !== '') return -1;
+            return (x < y ? -1 : x > y ? 1 : 0) * dir;
+        });
+    }
+    $: shown = sorted(results, sortKey, sortDir);
+    const arrow = (key, k, d) => (k === key ? (d > 0 ? ' ▲' : ' ▼') : '');
 
     async function openAircraft(hex, fromList = true) {
         detailLoading = true;
@@ -109,10 +180,11 @@
         visitsMore = body.visits_list.length === PAGE && detail.visits_list.length < detail.visits_in_history;
     }
 
-    function updateUrl(q) {
+    function updateUrl(q, g = '') {
         try {
             const url = new URL(window.location.href);
             if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+            if (g) url.searchParams.set('group', g); else url.searchParams.delete('group');
             history.replaceState(null, '', url);
         } catch (e) { /* ignore */ }
     }
@@ -153,11 +225,17 @@
         return `https://flightaware.com/live/modes/${encodeURIComponent(d.hex.replace('~', ''))}/redirect`;
     }
     const groupBadge = { Mil: 'Military', Gov: 'Government', Pol: 'Police', Civ: 'Civilian' };
+    const groupName = { Mil: 'Military aircraft', Gov: 'Government aircraft', Pol: 'Police aircraft', Civ: 'Civilian aircraft of interest' };
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     onMount(() => {
-        const q = new URLSearchParams(window.location.search).get('q');
-        if (q) {
+        const params = new URLSearchParams(window.location.search);
+        const q = params.get('q');
+        const g = params.get('group');
+        if (g && groupName[g]) {
+            group = g;
+            runSearch();
+        } else if (q) {
             query = q;
             runSearch();
         }
@@ -165,9 +243,15 @@
         window.addEventListener('skystats-open-search', focus);
         // a registration clicked in Interesting Aircraft / Record Holders:
         // search the whole history for it
+        // or a group card header: list the whole group
         const searchFor = (e) => {
-            query = e.detail;
             days = '0';
+            if (e.detail && e.detail.group) {
+                group = e.detail.group;
+            } else {
+                group = '';
+                query = e.detail;
+            }
             runSearch();
         };
         window.addEventListener('skystats-search-for', searchFor);
@@ -202,10 +286,18 @@
                 <option value="365">Last 12 months</option>
             </select>
         </form>
-        <p class="text-sm text-base-content/60 mt-1">
-            Matches registration, hex code, callsign, aircraft type (for example B739 or C17) or operator name.
-            Results appear as you type.
-        </p>
+        {#if group}
+            <div class="flex flex-wrap items-center gap-2 mt-1">
+                <span class="badge badge-warning">{groupName[group]}</span>
+                <span class="text-sm text-base-content/60">Every aircraft of this group seen{days !== '0' ? ' in this period' : ''}.</span>
+                <button type="button" class="btn btn-ghost btn-xs" on:click={clearGroup}>Clear</button>
+            </div>
+        {:else}
+            <p class="text-sm text-base-content/60 mt-1">
+                Matches registration, hex code, callsign, aircraft type (for example B739 or C17) or operator name.
+                Results appear as you type.
+            </p>
+        {/if}
     </div>
 </div>
 
@@ -223,21 +315,26 @@
             {#if results.length === 0}
                 <div class="alert alert-info">
                     <IconInfoCircle class="w-6 h-6" />
-                    <span>Nothing matching “{searchedFor}” has been seen{days !== '0' ? ' in this period' : ''}.</span>
+                    <span>{group ? `No ${searchedFor.toLowerCase()} have been seen` : `Nothing matching “${searchedFor}” has been seen`}{days !== '0' ? ' in this period' : ''}.</span>
                 </div>
             {:else}
                 <p class="text-sm text-base-content/60 mb-2">
-                    {results.length}{more ? '+' : ''} aircraft match “{searchedFor}”{more ? ' (showing the most recent 200)' : ''}. Click one to see its visits.
+                    {results.length}{more ? '+' : ''} {group ? searchedFor.toLowerCase() : `aircraft match “${searchedFor}”`}{more ? ` (showing the most recent ${limit})` : ''}.
+                    Click one to see its visits, or a column heading to sort.
                 </p>
                 <div class="overflow-x-auto">
                     <table class="table table-sm">
                         <thead>
                             <tr class="uppercase tracking-wider">
-                                <th>Registration</th><th>Operator</th><th>Type</th><th class="text-right">Visits</th><th>Last seen</th>
+                                <th aria-sort={sortKey === 'reg' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('reg')}>Registration{arrow('reg', sortKey, sortDir)}</button></th>
+                                <th aria-sort={sortKey === 'operator' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('operator')}>Operator{arrow('operator', sortKey, sortDir)}</button></th>
+                                <th aria-sort={sortKey === 'type' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('type')}>Type{arrow('type', sortKey, sortDir)}</button></th>
+                                <th class="text-right" aria-sort={sortKey === 'visits' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('visits')}>Visits{arrow('visits', sortKey, sortDir)}</button></th>
+                                <th aria-sort={sortKey === 'last' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('last')}>Last seen{arrow('last', sortKey, sortDir)}</button></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {#each results as a (a.hex)}
+                            {#each shown as a (a.hex)}
                                 <tr class="hover cursor-pointer {detail?.hex === a.hex ? 'bg-base-200' : ''}" on:click={() => openAircraft(a.hex)}>
                                     <td class="font-mono whitespace-nowrap">
                                         <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex)}>{a.registration || a.hex.toUpperCase()}</button>

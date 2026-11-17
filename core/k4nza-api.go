@@ -4,6 +4,7 @@ package main
 //
 //   GET /api/search?q=...&days=0|7|30|365      aircraft matching a registration, hex code,
 //                                             callsign, type or operator
+//   GET /api/search?group=Mil|Gov|Pol|Civ&days every aircraft of one interesting group
 //   GET /api/search/aircraft/:hex?limit&offset one aircraft: details and its visits
 //   GET /api/search/aircraft/:hex/visits.csv   every visit of one aircraft as CSV
 //
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 )
 
@@ -98,6 +100,12 @@ func (s *APIServer) allTimeTotalsCached() (flights, aircraft, routed int64, err 
 
 const searchMaxResults = 200
 
+// a whole group can be large (thousands of civilian aircraft of interest)
+const groupSearchMaxResults = 1000
+
+// interesting groups that can be listed with /api/search?group=
+var searchGroups = map[string]bool{"Mil": true, "Gov": true, "Pol": true, "Civ": true}
+
 var (
 	hexPattern      = regexp.MustCompile(`^~?[0-9a-f]{6}$`)
 	searchSanitizer = regexp.MustCompile(`[^A-Z0-9~]`)
@@ -149,15 +157,7 @@ const regKeyRegistration = `regexp_replace(upper(registration), '[^A-Z0-9]', '',
 // $3 hex (” = not a hex code), $4 operator pattern (” = don't search
 // operators), $5 days (0 = all time), $6 max rows.
 const searchSQL = `
-	WITH live AS (
-		SELECT hex, MAX(NULLIF(t, '')) AS t, MAX(NULLIF(r, '')) AS r,
-		       MIN(first_seen) AS first_seen, MAX(last_seen) AS last_seen, COUNT(*) AS visits,
-		       MIN(LEAST(min_distance, last_seen_distance, NULLIF(r_dst, 0) * 1.852)) AS min_distance,
-		       ARRAY_AGG(DISTINCT flight) FILTER (WHERE flight <> '') AS flights
-		FROM aircraft_data
-		WHERE first_seen >= $1 AND hex IS NOT NULL
-		GROUP BY hex
-	),
+	WITH ` + searchLiveCTE + `,
 	cand AS (
 		SELECT hex, 'hex code' AS m FROM k4nza_aircraft_seen WHERE $3 <> '' AND hex = $3
 		UNION SELECT hex, 'hex code' FROM live WHERE $3 <> '' AND hex = $3
@@ -177,6 +177,34 @@ const searchSQL = `
 		      JOIN live l ON rd.route_callsign = ANY(l.flights)
 		      WHERE $4 <> '' AND rd.airline_name ILIKE $4
 	),
+` + searchResultSQL
+
+// groupSearchSQL lists every aircraft of one interesting group (Mil, Gov,
+// Pol, Civ) that was ever seen: by the plane-alert-db list, and by what was
+// recorded when it was seen (the list can change). $1 watermark, $2 group,
+// $3 days (0 = all time), $4 max rows.
+var groupSearchSQL = `
+	WITH ` + searchLiveCTE + `,
+	cand AS (
+		SELECT lower(icao) AS hex, 'group' AS m FROM interesting_aircraft WHERE "group" = $2
+		UNION SELECT lower(icao), 'group' FROM interesting_aircraft_seen WHERE "group" = $2
+	),
+` + strings.NewReplacer("$5", "$3", "$6", "$4").Replace(searchResultSQL)
+
+// searchLiveCTE: visits not yet rolled up into k4nza_aircraft_seen. $1 watermark.
+const searchLiveCTE = `live AS (
+		SELECT hex, MAX(NULLIF(t, '')) AS t, MAX(NULLIF(r, '')) AS r,
+		       MIN(first_seen) AS first_seen, MAX(last_seen) AS last_seen, COUNT(*) AS visits,
+		       MIN(LEAST(min_distance, last_seen_distance, NULLIF(r_dst, 0) * 1.852)) AS min_distance,
+		       ARRAY_AGG(DISTINCT flight) FILTER (WHERE flight <> '') AS flights
+		FROM aircraft_data
+		WHERE first_seen >= $1 AND hex IS NOT NULL
+		GROUP BY hex
+	)`
+
+// searchResultSQL adds up the visits of the candidate aircraft (cand: hex,
+// how it matched). $5 days (0 = all time), $6 max rows.
+const searchResultSQL = `
 	matched AS (
 		SELECT hex, string_agg(DISTINCT m, ', ') AS how FROM cand GROUP BY hex
 	)
@@ -217,8 +245,14 @@ type searchResult struct {
 }
 
 func (s *APIServer) search(c *gin.Context) {
+	group := c.Query("group")
 	terms, ok := parseSearch(c.Query("q"))
-	if !ok {
+	if group != "" {
+		if !searchGroups[group] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "unknown group"})
+			return
+		}
+	} else if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "type at least 2 letters or digits"})
 		return
 	}
@@ -231,12 +265,19 @@ func (s *APIServer) search(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	operator := ""
-	if len(terms.raw) >= 3 {
-		operator = "%" + escapeLike(terms.raw) + "%"
+	maxResults := searchMaxResults
+	var rows pgx.Rows
+	if group != "" {
+		maxResults = groupSearchMaxResults
+		terms.raw = group
+		rows, err = s.pg.db.Query(ctx, groupSearchSQL, w, group, days, maxResults+1)
+	} else {
+		operator := ""
+		if len(terms.raw) >= 3 {
+			operator = "%" + escapeLike(terms.raw) + "%"
+		}
+		rows, err = s.pg.db.Query(ctx, searchSQL, w, escapeLike(terms.key), terms.hex, operator, days, maxResults+1)
 	}
-
-	rows, err := s.pg.db.Query(ctx, searchSQL, w, escapeLike(terms.key), terms.hex, operator, days, searchMaxResults+1)
 	if err != nil {
 		log.Error().Err(err).Msg("search failed")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "search failed"})
@@ -258,11 +299,11 @@ func (s *APIServer) search(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	more := len(results) > searchMaxResults
+	more := len(results) > maxResults
 	if more {
-		results = results[:searchMaxResults]
+		results = results[:maxResults]
 	}
-	c.JSON(http.StatusOK, gin.H{"query": terms.raw, "results": results, "more": more})
+	c.JSON(http.StatusOK, gin.H{"query": terms.raw, "group": group, "results": results, "more": more, "limit": maxResults})
 }
 
 func validHex(h string) (string, bool) {
