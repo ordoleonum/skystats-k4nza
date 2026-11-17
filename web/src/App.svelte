@@ -11,7 +11,9 @@
   import Settings from './components/Settings.svelte';
 
   // ?q=... (e.g. from the feeder home page) opens the Search tab
-  let activeTab = new URLSearchParams(window.location.search).get('q') ? 'search' : 'activity';
+  // ?q=... (a search) or ?group=Mil|Gov|Pol|Civ (a whole interesting group) opens the Search tab
+  const startParams = new URLSearchParams(window.location.search);
+  let activeTab = startParams.get('q') || startParams.get('group') ? 'search' : 'activity';
   let tabsElement;
 
   const tabs = [
