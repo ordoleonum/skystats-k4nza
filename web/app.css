@@ -2,3 +2,27 @@
 @plugin "daisyui" {
     themes: nord --default, night
 }
+
+/* K4NZA: the same blue as the feeder's pages (light and dark) */
+[data-theme="nord"] { --color-primary: #2563eb; --color-primary-content: #ffffff; }
+[data-theme="night"] { --color-primary: #60a5fa; --color-primary-content: #0b1220; }
+
+/* K4NZA: one color per interesting group, everywhere it appears
+   (white text on the badge fills reads well in light and dark) */
+.grp-badge { border: none; color: #ffffff; }
+.grp-Mil { background-color: #4d7c0f; }
+.grp-Gov { background-color: #1d4ed8; }
+.grp-Pol { background-color: #b91c1c; }
+.grp-Civ { background-color: #7e22ce; }
+.grp-text-Mil { color: #65a30d; }
+.grp-text-Gov { color: #3b82f6; }
+.grp-text-Pol { color: #ef4444; }
+.grp-text-Civ { color: #a855f7; }
+.grp-btn-Mil { border-color: #65a30d; color: #65a30d; }
+.grp-btn-Gov { border-color: #3b82f6; color: #3b82f6; }
+.grp-btn-Pol { border-color: #ef4444; color: #ef4444; }
+.grp-btn-Civ { border-color: #a855f7; color: #a855f7; }
+.grp-btn-Mil:hover { background-color: #4d7c0f; color: #fff; }
+.grp-btn-Gov:hover { background-color: #1d4ed8; color: #fff; }
+.grp-btn-Pol:hover { background-color: #b91c1c; color: #fff; }
+.grp-btn-Civ:hover { background-color: #7e22ce; color: #fff; }

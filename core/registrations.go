@@ -29,6 +29,13 @@ func updateRegistrations(pg *postgres) {
 
 	for _, aircraft := range new {
 
+		// K4NZA: "~" codes are TIS-B / non-ICAO addresses with no registration;
+		// asking adsbdb only gets an error (and used to block the whole queue)
+		if strings.HasPrefix(aircraft.Hex, "~") {
+			existing = append(existing, aircraft)
+			continue
+		}
+
 		registration, err := getRegistration(aircraft)
 
 		if err != nil {
@@ -120,14 +127,15 @@ func getRegistration(aircraft Aircraft) (*RegistrationInfo, error) {
 	url := "https://api.adsbdb.com/v0/aircraft/"
 	url += aircraft.Hex
 
-	// A 404 means adsbdb does not know this aircraft (treated as "no
-	// registration"). Any other
+	// A 404 (or 400, an address adsbdb can't look up) means adsbdb does not
+	// know this aircraft (treated as "no registration"). Any other
 	// error (rate limit, server error, network) is returned so the aircraft
 	// stays unprocessed and is retried later instead of being marked empty.
 	data, err := httpGetBytes(remoteHTTPClient, url, nil)
 	if err != nil {
 		var statusErr *HTTPStatusError
-		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusNotFound {
+		if errors.As(err, &statusErr) &&
+			(statusErr.StatusCode == http.StatusNotFound || statusErr.StatusCode == http.StatusBadRequest) {
 			return &RegistrationInfo{}, nil
 		}
 		return nil, err

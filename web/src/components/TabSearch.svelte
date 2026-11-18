@@ -325,7 +325,7 @@
         </form>
         {#if group}
             <div class="flex flex-wrap items-center gap-2 mt-1">
-                <span class="badge badge-warning">{groupName[group]}</span>
+                <span class="badge grp-badge grp-{group}">{groupName[group]}</span>
                 <span class="text-sm text-base-content/60">Every aircraft of this group seen{days !== '0' ? ' in this period' : ''}.</span>
                 <button type="button" class="btn btn-ghost btn-xs" on:click={clearGroup}>Clear</button>
             </div>
@@ -348,7 +348,7 @@
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm text-base-content/60 mr-1">Show every aircraft seen in a group:</span>
                 {#each groupKeys as g}
-                    <button type="button" class="btn btn-sm btn-outline" on:click={() => pickGroup(g)}>{groupBadge[g]}</button>
+                    <button type="button" class="btn btn-sm btn-outline grp-btn-{g}" on:click={() => pickGroup(g)}>{groupBadge[g]}</button>
                 {/each}
             </div>
             {#if recentInteresting && recentInteresting.length}
@@ -364,7 +364,7 @@
                                     </td>
                                     <td class="hidden sm:table-cell">{a.operator || '–'}</td>
                                     <td class="whitespace-nowrap">{a.icao_type || a.type || '–'}
-                                        {#if groupBadge[a.group]}<span class="badge badge-sm badge-warning ml-1">{groupBadge[a.group]}</span>{/if}</td>
+                                        {#if groupBadge[a.group]}<span class="badge badge-sm grp-badge grp-{a.group} ml-1">{groupBadge[a.group]}</span>{/if}</td>
                                     <td class="whitespace-nowrap text-right">{fmtShortDate(a.seen)}</td>
                                 </tr>
                             {/each}
@@ -414,7 +414,7 @@
                             <span class="badge badge-primary badge-outline align-middle ml-1">{detail.interesting?.operator || detail.owner}</span>
                         {/if}
                         {#if groupBadge[detail.interesting?.group]}
-                            <span class="badge badge-warning align-middle ml-1">{groupBadge[detail.interesting.group]}</span>
+                            <span class="badge grp-badge grp-{detail.interesting.group} align-middle ml-1">{groupBadge[detail.interesting.group]}</span>
                         {/if}
                     </h3>
                     {#if detail.interesting?.category === FEEDER_MILITARY}
@@ -516,13 +516,13 @@
                                         <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex)}>{a.registration || a.hex.toUpperCase()}</button>
                                         <div class="sm:hidden text-xs text-base-content/60 font-sans whitespace-normal">
                                             {a.operator || ''}
-                                            {#if groupBadge[a.interesting_group]}<span class="badge badge-xs badge-warning ml-1">{groupBadge[a.interesting_group]}</span>{/if}
+                                            {#if groupBadge[a.interesting_group]}<span class="badge badge-xs grp-badge grp-{a.interesting_group} ml-1">{groupBadge[a.interesting_group]}</span>{/if}
                                         </div>
                                     </td>
                                     <td class="hidden sm:table-cell">
                                         {a.operator || '–'}
                                         {#if groupBadge[a.interesting_group]}
-                                            <span class="badge badge-sm badge-warning ml-1">{groupBadge[a.interesting_group]}</span>
+                                            <span class="badge badge-sm grp-badge grp-{a.interesting_group} ml-1">{groupBadge[a.interesting_group]}</span>
                                         {/if}
                                     </td>
                                     <td class="whitespace-nowrap"><span class="hidden sm:inline">{a.model ? `${a.model} (${a.type})` : (a.type || '–')}</span><span class="sm:hidden font-mono" title={a.model || ''}>{a.type || '–'}</span></td>

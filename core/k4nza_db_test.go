@@ -496,3 +496,53 @@ func TestFeederMilitaryIsTaggedMil(t *testing.T) {
 		t.Errorf("backfill ran a second time")
 	}
 }
+
+func TestTisbCodeDoesNotBlockRegistrations(t *testing.T) {
+	pg := testPG(t)
+	ctx := context.Background()
+	// a TIS-B / non-ICAO code: adsbdb can't look it up, so it must be set
+	// aside without asking (it used to block every lookup behind it)
+	insertVisit(t, pg, testVisit{hex: "~29414b", first: daysAgo(1), lastKm: 20})
+	updateRegistrations(pg)
+	var done bool
+	if err := pg.db.QueryRow(ctx, `SELECT registration_processed FROM aircraft_data WHERE hex = '~29414b'`).Scan(&done); err != nil {
+		t.Fatal(err)
+	}
+	if !done {
+		t.Errorf("~29414b is still waiting for a registration lookup")
+	}
+}
+
+func TestMarkProcessedMarksEveryRow(t *testing.T) {
+	pg := testPG(t)
+	ctx := context.Background()
+	for _, h := range []string{"f00001", "f00002", "f00003"} {
+		insertVisit(t, pg, testVisit{hex: h, first: daysAgo(1), lastKm: 20})
+	}
+	var ids []int
+	rows, err := pg.db.Query(ctx, `SELECT id FROM aircraft_data ORDER BY id DESC`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	list := []Aircraft{}
+	for _, id := range ids { // any order: MarkProcessed sorts them
+		list = append(list, Aircraft{Id: id})
+	}
+	MarkProcessed(pg, "lowest_aircraft_processed", list)
+	var n int
+	if err := pg.db.QueryRow(ctx, `SELECT COUNT(*) FROM aircraft_data WHERE lowest_aircraft_processed`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Errorf("%d of 3 rows marked processed", n)
+	}
+	MarkProcessed(pg, "lowest_aircraft_processed", nil) // nothing to do, no error
+}

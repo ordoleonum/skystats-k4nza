@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -381,6 +382,17 @@ func insertNewAircrafts(pg *postgres, nowEpoch float64, existingAircrafts map[st
 func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraft, existingAircrafts map[string]*Aircraft) {
 
 	batch := &pgx.Batch{}
+
+	// K4NZA: update rows in id order, the same order MarkProcessed locks them,
+	// so the two can never deadlock
+	aircrafts = append([]Aircraft(nil), aircrafts...)
+	sort.SliceStable(aircrafts, func(i, j int) bool {
+		a, b := existingAircrafts[aircrafts[i].Hex], existingAircrafts[aircrafts[j].Hex]
+		if a == nil || b == nil {
+			return b == nil && a != nil
+		}
+		return a.Id < b.Id
+	})
 
 	for _, aircraft := range aircrafts {
 		existingAircraft, exists := existingAircrafts[aircraft.Hex]

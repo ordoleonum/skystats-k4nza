@@ -2,28 +2,33 @@ package main
 
 import (
 	"context"
+	"sort"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 )
 
+// MarkProcessed sets a *_processed flag on the given rows.
+//
+// K4NZA: one statement that locks the rows in id order (as the live aircraft
+// update does), instead of up to 1000 single-row updates in one transaction
+// in whatever order the job had them. The old way deadlocked with the live
+// update about 40 times a day, which threw away both batches.
 func MarkProcessed(pg *postgres, colName string, aircrafts []Aircraft) {
-
-	batch := &pgx.Batch{}
-
-	for _, aircraft := range aircrafts {
-		updateStatement := `UPDATE aircraft_data SET ` + colName + ` = true WHERE id = $1`
-		batch.Queue(updateStatement, aircraft.Id)
+	if len(aircrafts) == 0 {
+		return
 	}
+	ids := make([]int, 0, len(aircrafts))
+	for _, aircraft := range aircrafts {
+		ids = append(ids, aircraft.Id)
+	}
+	sort.Ints(ids)
 
-	br := pg.db.SendBatch(context.Background(), batch)
-	defer br.Close()
-
-	for i := 0; i < len(aircrafts); i++ {
-		_, err := br.Exec()
-		if err != nil {
-			log.Error().Err(err).Msg("MarkProcessed() - Unable to update data")
-		}
+	_, err := pg.db.Exec(context.Background(), `
+		UPDATE aircraft_data a SET `+colName+` = true
+		FROM (SELECT id FROM aircraft_data WHERE id = ANY($1) ORDER BY id FOR UPDATE) l
+		WHERE a.id = l.id`, ids)
+	if err != nil {
+		log.Error().Err(err).Msg("MarkProcessed() - Unable to update data")
 	}
 }
 

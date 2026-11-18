@@ -74,7 +74,7 @@
                 <div class="flex items-center gap-2 {description ? 'mb-1' : 'mb-5'}">
                 {#if icon}
                     <div class="w-8 h-8 rounded-lg flex items-center justify-center">
-                        <svelte:component this={icon} class="w-6 h-6 text-primary" />
+                        <svelte:component this={icon} class="w-6 h-6 {group ? `grp-text-${group}` : 'text-primary'}" />
                     </div>
                 {/if}
                 {#if group}
