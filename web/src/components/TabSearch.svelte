@@ -2,7 +2,7 @@
     // Aircraft search: registration, hex code, callsign, type or operator.
     // Opens directly with ?q=... (the feeder home page links here).
     import { onMount, tick } from 'svelte';
-    import { IconSearch, IconDownload, IconExternalLink, IconPhoto, IconArrowLeft, IconInfoCircle } from '@tabler/icons-svelte';
+    import { IconSearch, IconDownload, IconExternalLink, IconPhoto, IconX, IconInfoCircle } from '@tabler/icons-svelte';
     import { units } from '../stores/units';
     import { formatDistanceKm, formatAltitude } from '../lib/units';
 
@@ -129,6 +129,12 @@
         });
     }
     $: shown = sorted(results, sortKey, sortDir);
+
+    // the list starts collapsed to the first few rows; "See more" shows them all
+    const COLLAPSED = 10;
+    let expanded = false;
+    $: results, (expanded = false); // a new search collapses it again
+    $: rows = expanded ? shown : shown.slice(0, COLLAPSED);
     const arrow = (key, k, d) => (k === key ? (d > 0 ? ' ▲' : ' ▼') : '');
 
     async function openAircraft(hex, fromList = true) {
@@ -309,55 +315,6 @@
     <div class="flex justify-center py-8"><span class="loading loading-ring loading-lg"></span></div>
 {/if}
 
-{#if results && !(detail && !detail.fromList)}
-    <div class="card bg-base-100 shadow-sm rounded mb-6">
-        <div class="card-body">
-            {#if results.length === 0}
-                <div class="alert alert-info">
-                    <IconInfoCircle class="w-6 h-6" />
-                    <span>{group ? `No ${searchedFor.toLowerCase()} have been seen` : `Nothing matching “${searchedFor}” has been seen`}{days !== '0' ? ' in this period' : ''}.</span>
-                </div>
-            {:else}
-                <p class="text-sm text-base-content/60 mb-2">
-                    {results.length}{more ? '+' : ''} {group ? searchedFor.toLowerCase() : `aircraft match “${searchedFor}”`}{more ? ` (showing the most recent ${limit})` : ''}.
-                    Click one to see its visits, or a column heading to sort.
-                </p>
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr class="uppercase tracking-wider">
-                                <th aria-sort={sortKey === 'reg' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('reg')}>Registration{arrow('reg', sortKey, sortDir)}</button></th>
-                                <th aria-sort={sortKey === 'operator' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('operator')}>Operator{arrow('operator', sortKey, sortDir)}</button></th>
-                                <th aria-sort={sortKey === 'type' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('type')}>Type{arrow('type', sortKey, sortDir)}</button></th>
-                                <th class="text-right" aria-sort={sortKey === 'visits' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('visits')}>Visits{arrow('visits', sortKey, sortDir)}</button></th>
-                                <th aria-sort={sortKey === 'last' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('last')}>Last seen{arrow('last', sortKey, sortDir)}</button></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each shown as a (a.hex)}
-                                <tr class="hover cursor-pointer {detail?.hex === a.hex ? 'bg-base-200' : ''}" on:click={() => openAircraft(a.hex)}>
-                                    <td class="font-mono whitespace-nowrap">
-                                        <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex)}>{a.registration || a.hex.toUpperCase()}</button>
-                                    </td>
-                                    <td>
-                                        {a.operator || '–'}
-                                        {#if groupBadge[a.interesting_group]}
-                                            <span class="badge badge-sm badge-warning ml-1">{groupBadge[a.interesting_group]}</span>
-                                        {/if}
-                                    </td>
-                                    <td class="whitespace-nowrap">{a.model ? `${a.model} (${a.type})` : (a.type || '–')}</td>
-                                    <td class="text-right">{a.visits.toLocaleString()}</td>
-                                    <td class="whitespace-nowrap">{fmtShortDate(a.last_seen)}</td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
-                </div>
-            {/if}
-        </div>
-    </div>
-{/if}
-
 {#if detailLoading}
     <div class="flex justify-center py-8"><span class="loading loading-ring loading-lg"></span></div>
 {/if}
@@ -367,7 +324,7 @@
         <div class="card-body">
             {#if detail.fromList && results && results.length > 1}
                 <button class="btn btn-ghost btn-sm self-start -ml-2 mb-1" on:click={() => (detail = null)}>
-                    <IconArrowLeft class="w-4 h-4" /> Back to all {results.length} results
+                    <IconX class="w-4 h-4" /> Close
                 </button>
             {/if}
             <div class="flex flex-col sm:flex-row gap-4 items-start">
@@ -454,6 +411,62 @@
                 </a>
                 <span class="text-base-content/50">Times are in {tz}.</span>
             </div>
+        </div>
+    </div>
+{/if}
+
+{#if results && !(detail && !detail.fromList)}
+    <div class="card bg-base-100 shadow-sm rounded mb-6">
+        <div class="card-body">
+            {#if results.length === 0}
+                <div class="alert alert-info">
+                    <IconInfoCircle class="w-6 h-6" />
+                    <span>{group ? `No ${searchedFor.toLowerCase()} have been seen` : `Nothing matching “${searchedFor}” has been seen`}{days !== '0' ? ' in this period' : ''}.</span>
+                </div>
+            {:else}
+                <p class="text-sm text-base-content/60 mb-2">
+                    {results.length}{more ? '+' : ''} {group ? searchedFor.toLowerCase() : `aircraft match “${searchedFor}”`}{more ? ` (showing the most recent ${limit})` : ''}.
+                    Click one to see its visits above, or a column heading to sort.
+                </p>
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr class="uppercase tracking-wider">
+                                <th aria-sort={sortKey === 'reg' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('reg')}>Registration{arrow('reg', sortKey, sortDir)}</button></th>
+                                <th aria-sort={sortKey === 'operator' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('operator')}>Operator{arrow('operator', sortKey, sortDir)}</button></th>
+                                <th aria-sort={sortKey === 'type' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('type')}>Type{arrow('type', sortKey, sortDir)}</button></th>
+                                <th class="text-right" aria-sort={sortKey === 'visits' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('visits')}>Visits{arrow('visits', sortKey, sortDir)}</button></th>
+                                <th aria-sort={sortKey === 'last' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('last')}>Last seen{arrow('last', sortKey, sortDir)}</button></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#each rows as a (a.hex)}
+                                <tr class="hover cursor-pointer {detail?.hex === a.hex ? 'bg-base-200' : ''}" on:click={() => openAircraft(a.hex)}>
+                                    <td class="font-mono whitespace-nowrap">
+                                        <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex)}>{a.registration || a.hex.toUpperCase()}</button>
+                                    </td>
+                                    <td>
+                                        {a.operator || '–'}
+                                        {#if groupBadge[a.interesting_group]}
+                                            <span class="badge badge-sm badge-warning ml-1">{groupBadge[a.interesting_group]}</span>
+                                        {/if}
+                                    </td>
+                                    <td class="whitespace-nowrap">{a.model ? `${a.model} (${a.type})` : (a.type || '–')}</td>
+                                    <td class="text-right">{a.visits.toLocaleString()}</td>
+                                    <td class="whitespace-nowrap">{fmtShortDate(a.last_seen)}</td>
+                                </tr>
+                            {/each}
+                        </tbody>
+                    </table>
+                </div>
+                {#if shown.length > COLLAPSED}
+                    <div class="flex justify-center mt-2">
+                        <button type="button" class="btn btn-sm btn-outline" on:click={() => (expanded = !expanded)} aria-expanded={expanded}>
+                            {expanded ? 'See less' : `See more (${(shown.length - COLLAPSED).toLocaleString()} more)`}
+                        </button>
+                    </div>
+                {/if}
+            {/if}
         </div>
     </div>
 {/if}
