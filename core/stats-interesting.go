@@ -90,23 +90,22 @@ func updateInterestingSeen(pg *postgres) {
 	for i := range interestingAircrafts {
 		interestingAircraft := &interestingAircrafts[i]
 		if aircraft, ok := aircraftsMap[interestingAircraft.Icao]; ok {
-			interestingAircraft.Hex = aircraft.Hex
-			interestingAircraft.Flight = aircraft.Flight
-			interestingAircraft.R = aircraft.R
-			interestingAircraft.T = aircraft.T
-			interestingAircraft.AltBaro = aircraft.AltBaro
-			interestingAircraft.AltGeom = aircraft.AltGeom
-			interestingAircraft.Gs = aircraft.Gs
-			interestingAircraft.Ias = aircraft.Ias
-			interestingAircraft.Tas = aircraft.Tas
-			interestingAircraft.Track = aircraft.Track
-			interestingAircraft.BaroRate = aircraft.BaroRate
-			interestingAircraft.Lat = aircraft.Lat
-			interestingAircraft.Lon = aircraft.Lon
-			interestingAircraft.Alert = aircraft.Alert
-			interestingAircraft.DbFlags = aircraft.DbFlags
-			interestingAircraft.Seen = aircraft.FirstSeen
-			interestingAircraft.SeenEpoch = aircraft.FirstSeenEpoch
+			copyLiveFields(interestingAircraft, aircraft)
+		}
+	}
+
+	// K4NZA: aircraft the feeder's own database flags as military count as
+	// Military too when plane-alert-db doesn't list them (k4nza-military.go)
+	listed := make(map[string]bool, len(interestingAircrafts))
+	for _, ia := range interestingAircrafts {
+		listed[ia.Icao] = true
+	}
+	for hex, aircraft := range aircraftsMap {
+		if listed[hex] {
+			continue
+		}
+		if ia, ok := feederMilitary(aircraft); ok {
+			interestingAircrafts = append(interestingAircrafts, ia)
 		}
 	}
 

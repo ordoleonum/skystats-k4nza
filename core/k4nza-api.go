@@ -222,7 +222,13 @@ const searchResultSQL = `
 	LEFT JOIN live l ON l.hex = m.hex
 	LEFT JOIN registration_data rd ON rd.mode_s = m.hex
 	LEFT JOIN LATERAL (
-		SELECT operator, "group" FROM interesting_aircraft WHERE icao = upper(m.hex) LIMIT 1
+		-- plane-alert-db first, else what was recorded when it was seen
+		-- (aircraft the feeder's database flags as military)
+		SELECT operator, "group" FROM (
+			SELECT 1 AS o, operator, "group" FROM interesting_aircraft WHERE icao = upper(m.hex)
+			UNION ALL
+			SELECT 2, operator, "group" FROM interesting_aircraft_seen WHERE icao = upper(m.hex)
+		) x ORDER BY o LIMIT 1
 	) ia ON TRUE
 	WHERE (s.hex IS NOT NULL OR l.hex IS NOT NULL)
 	  AND ($5 = 0 OR GREATEST(s.last_seen, l.last_seen) >= NOW() - make_interval(days => $5))
@@ -424,7 +430,13 @@ func (s *APIServer) searchAircraft(c *gin.Context) {
 	if err := s.pg.db.QueryRow(ctx, `
 		SELECT COALESCE(operator, ''), COALESCE("group", ''), COALESCE(category, ''), COALESCE(link, ''),
 		       COALESCE(tag1, ''), COALESCE(tag2, ''), COALESCE(tag3, '')
-		FROM interesting_aircraft WHERE icao = upper($1) LIMIT 1`, hex).
+		FROM (
+			SELECT 1 AS o, operator, "group", category, link, tag1, tag2, tag3
+			FROM interesting_aircraft WHERE icao = upper($1)
+			UNION ALL
+			SELECT 2, operator, "group", category, link, tag1, tag2, tag3
+			FROM interesting_aircraft_seen WHERE icao = upper($1)
+		) x ORDER BY o LIMIT 1`, hex).
 		Scan(&iaOperator, &iaGroup, &iaCategory, &iaLink, &tag1, &tag2, &tag3); err == nil {
 		info["interesting"] = gin.H{
 			"operator": iaOperator, "group": iaGroup, "category": iaCategory, "link": iaLink,

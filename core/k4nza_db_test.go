@@ -339,3 +339,90 @@ func TestClosestDistanceIsTracked(t *testing.T) {
 		t.Errorf("rows=%d closest=%v km, want 1 row and about 12 km", rows, minKm)
 	}
 }
+
+func TestFeederMilitaryIsTaggedMil(t *testing.T) {
+	pg := testPG(t)
+	ctx := context.Background()
+	if _, err := pg.db.Exec(ctx, `DELETE FROM interesting_aircraft_seen; DELETE FROM k4nza_once`); err != nil {
+		t.Fatal(err)
+	}
+	insertVisit(t, pg, testVisit{hex: "ae0001", r: "61-0277", t: "K35R", first: daysAgo(1), lastKm: 20})
+	insertVisit(t, pg, testVisit{hex: "aeefbb", t: "E6", first: daysAgo(1), lastKm: 15})
+	insertVisit(t, pg, testVisit{hex: "a00001", r: "N1", t: "C172", first: daysAgo(1), lastKm: 10})
+	if _, err := pg.db.Exec(ctx, `
+		UPDATE aircraft_data SET db_flags = 1 WHERE hex IN ('ae0001', 'aeefbb');
+		UPDATE aircraft_data SET db_flags = 0 WHERE hex = 'a00001';
+		INSERT INTO interesting_aircraft (icao, registration, operator, "group", category)
+		VALUES ('AE0001', '61-0277', 'United States Air Force', 'Mil', 'Tanker')`); err != nil {
+		t.Fatal(err)
+	}
+
+	updateInterestingSeen(pg)
+
+	seen := func(icao string) (n int, group, category string) {
+		t.Helper()
+		if err := pg.db.QueryRow(ctx, `
+			SELECT COUNT(*), COALESCE(MAX("group"), ''), COALESCE(MAX(category), '')
+			FROM interesting_aircraft_seen WHERE icao = $1`, icao).Scan(&n, &group, &category); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if n, g, c := seen("AE0001"); n != 1 || g != "Mil" || c != "Tanker" {
+		t.Errorf("listed aircraft: %d row(s), group %q, category %q; want plane-alert-db's entry", n, g, c)
+	}
+	if n, g, c := seen("AEEFBB"); n != 1 || g != "Mil" || c != feederMilitaryOrigin {
+		t.Errorf("feeder-flagged aircraft: %d row(s), group %q, category %q; want 1 Mil row", n, g, c)
+	}
+	if n, _, _ := seen("A00001"); n != 0 {
+		t.Errorf("civil aircraft without the flag was recorded as interesting")
+	}
+
+	// search shows it in the Military group, with the badge
+	r := testRouter(pg)
+	var res struct {
+		Results []searchResult `json:"results"`
+	}
+	getJSON(t, r, "/api/search?group=Mil", &res)
+	found := false
+	for _, a := range res.Results {
+		if a.Hex == "aeefbb" {
+			found = true
+			if a.Group != "Mil" {
+				t.Errorf("aeefbb in group search has group %q, want Mil", a.Group)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("group=Mil = %+v, want aeefbb included", res.Results)
+	}
+	var detail struct {
+		Interesting struct {
+			Group string `json:"group"`
+		} `json:"interesting"`
+	}
+	if code := getJSON(t, r, "/api/search/aircraft/aeefbb", &detail); code != 200 || detail.Interesting.Group != "Mil" {
+		t.Errorf("aircraft detail: HTTP %d, group %q, want Mil", code, detail.Interesting.Group)
+	}
+
+	// visits processed before this existed are marked once, at start-up
+	insertVisit(t, pg, testVisit{hex: "ae5555", t: "P8", first: daysAgo(30), lastKm: 50})
+	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET db_flags = 1, interesting_processed = true WHERE hex = 'ae5555'`); err != nil {
+		t.Fatal(err)
+	}
+	backfillFeederMilitary(pg)
+	if n, g, _ := seen("AE5555"); n != 1 || g != "Mil" {
+		t.Errorf("backfill: %d row(s), group %q, want 1 Mil row", n, g)
+	}
+	if n, _, _ := seen("AEEFBB"); n != 1 {
+		t.Errorf("backfill duplicated an aircraft already recorded: %d rows", n)
+	}
+	insertVisit(t, pg, testVisit{hex: "ae6666", t: "H60", first: daysAgo(30), lastKm: 50})
+	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET db_flags = 1, interesting_processed = true WHERE hex = 'ae6666'`); err != nil {
+		t.Fatal(err)
+	}
+	backfillFeederMilitary(pg)
+	if n, _, _ := seen("AE6666"); n != 0 {
+		t.Errorf("backfill ran a second time")
+	}
+}

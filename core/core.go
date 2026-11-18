@@ -132,6 +132,7 @@ func main() {
 	// summarise past days (the first time: the whole existing history) in
 	// the background, so start-up isn't delayed on a large database
 	go runSafely("summary rollup", func() { runRollup(pg) })
+	go runSafely("feeder military backfill", func() { backfillFeederMilitary(pg) })
 
 	// Aircraft stay in view for minutes, so polling every few seconds misses
 	// nothing while keeping CPU use and database writes low.

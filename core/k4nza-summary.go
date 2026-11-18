@@ -66,6 +66,13 @@ var k4nzaSchemaStatements = []string{
 	`CREATE INDEX IF NOT EXISTS idx_k4nza_seen_regkey
 		ON k4nza_aircraft_seen ((regexp_replace(upper(r), '[^A-Z0-9]', '', 'g')) text_pattern_ops)`,
 	`CREATE INDEX IF NOT EXISTS idx_k4nza_seen_type ON k4nza_aircraft_seen (t)`,
+	// one-time jobs that already ran (name)
+	`CREATE TABLE IF NOT EXISTS k4nza_once (
+		name TEXT PRIMARY KEY,
+		done_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`,
+	// search: the group of an aircraft that plane-alert-db doesn't list
+	`CREATE INDEX IF NOT EXISTS idx_k4nza_interesting_seen_icao ON interesting_aircraft_seen (icao)`,
 	`CREATE INDEX IF NOT EXISTS idx_k4nza_callsign_prefix ON k4nza_callsign_seen (flight text_pattern_ops)`,
 	`CREATE INDEX IF NOT EXISTS idx_k4nza_registration_regkey
 		ON registration_data ((regexp_replace(upper(registration), '[^A-Z0-9]', '', 'g')) text_pattern_ops)`,

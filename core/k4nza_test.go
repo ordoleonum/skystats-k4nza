@@ -123,3 +123,20 @@ func TestRoutesRegister(t *testing.T) {
 	s := &APIServer{}
 	s.registerRoutes(gin.New())
 }
+
+func TestFeederMilitary(t *testing.T) {
+	ia, ok := feederMilitary(Aircraft{Hex: "aeefbb", T: "E6", DbFlags: 1, Flight: "IRON12"})
+	if !ok || ia.Icao != "AEEFBB" || ia.Group.String != "Mil" || ia.IcaoType.String != "E6" ||
+		ia.Registration.Valid || ia.Flight != "IRON12" || ia.Hex != "aeefbb" {
+		t.Errorf("military flag: %+v, %v", ia, ok)
+	}
+	// LADD (8) or PIA (4) alone is not military
+	for _, flags := range []int{0, 2, 4, 8} {
+		if _, ok := feederMilitary(Aircraft{Hex: "a00001", DbFlags: flags}); ok {
+			t.Errorf("dbFlags %d tagged as military", flags)
+		}
+	}
+	if _, ok := feederMilitary(Aircraft{Hex: " ", DbFlags: 1}); ok {
+		t.Errorf("empty hex tagged as military")
+	}
+}
