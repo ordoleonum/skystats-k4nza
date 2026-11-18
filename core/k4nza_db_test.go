@@ -457,6 +457,24 @@ func TestFeederMilitaryIsTaggedMil(t *testing.T) {
 		t.Errorf("aircraft detail: HTTP %d, group %q, want Mil", code, detail.Interesting.Group)
 	}
 
+	// the Military card lists it too (no operator or registration in its row)
+	var card []struct {
+		Registration string `json:"registration"`
+		Hex          string `json:"hex"`
+	}
+	if code := getJSON(t, r, "/api/stats/interesting/military", &card); code != 200 {
+		t.Fatalf("military card: HTTP %d", code)
+	}
+	onCard := false
+	for _, a := range card {
+		if a.Hex == "aeefbb" && a.Registration == "AEEFBB" {
+			onCard = true
+		}
+	}
+	if !onCard {
+		t.Errorf("military card = %+v, want aeefbb listed (registration falls back to the hex)", card)
+	}
+
 	// visits processed before this existed are marked once, at start-up
 	insertVisit(t, pg, testVisit{hex: "ae5555", t: "P8", first: daysAgo(30), lastKm: 50})
 	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET db_flags = 1, interesting_processed = true WHERE hex = 'ae5555'`); err != nil {

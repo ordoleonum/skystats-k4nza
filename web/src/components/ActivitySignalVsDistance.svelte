@@ -216,7 +216,8 @@
         <div class="alert alert-info text-sm mt-3">
             <span>Collecting closest-approach readings. Until there are enough for this period, the chart shows
             the signal when each aircraft was first heard: that is nearly always the weakest signal the receiver
-            can decode, so it looks like a flat line (your detection floor) whatever the distance.</span>
+            can decode, so it looks like a flat line (your detection floor) whatever the distance.
+            {#if data.closest_needed}Closest-approach readings so far: {data.closest_count} of {data.closest_needed}.{/if}</span>
         </div>
     {:else}
         <p class="text-xs opacity-60 mt-3">

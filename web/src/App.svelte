@@ -121,7 +121,7 @@
   </div>
 </div>
 
-<div class="container max-w-8xl mx-auto p-8">
+<div class="container max-w-8xl mx-auto px-2 py-8 sm:p-8">
   <div class="grid grid-cols-1 mt-10 mb-15">
     <AboveTimeline />
   </div>

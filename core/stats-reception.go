@@ -181,6 +181,7 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	closestCount := total
 	if total < signalMinClosest {
 		mode = "first_heard"
 		dist, sig = "r_dst", "rssi"
@@ -242,6 +243,9 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 		"points": points,
 		"median": median,
 		"mode":   mode,
+		// closest-approach readings in this period, and how many the chart waits for
+		"closest_count":  closestCount,
+		"closest_needed": signalMinClosest,
 	})
 }
 

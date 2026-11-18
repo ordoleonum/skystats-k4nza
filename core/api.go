@@ -441,14 +441,22 @@ func (s *APIServer) getRecentInterestingAircraft(c *gin.Context, group string) {
 
 	query := `
 		WITH latest_unique_reg AS (
-			SELECT DISTINCT ON (registration) icao, registration, 
-			operator, type, icao_type, "group", 
-			category, tag1, tag2, tag3, image_link_1, 
-			image_link_2, image_link_3,
-					hex, flight, seen, seen_epoch
-			FROM interesting_aircraft_seen
-			WHERE "group" = $1
-			ORDER BY registration, seen DESC
+			-- K4NZA: one row per aircraft (by hex: aircraft tagged from the
+			-- feeder's database may have no registration), never NULL text,
+			-- and the registered owner when plane-alert-db has no operator
+			SELECT DISTINCT ON (s.icao) s.icao,
+			COALESCE(NULLIF(s.registration, ''), NULLIF(trim(s.r), ''), rd.registration, s.icao) AS registration,
+			COALESCE(NULLIF(s.operator, ''), rd.registered_owner, '') AS operator,
+			COALESCE(NULLIF(s.type, ''), rd.type, '') AS type,
+			COALESCE(NULLIF(s.icao_type, ''), NULLIF(trim(s.t), ''), rd.icao_type, '') AS icao_type,
+			COALESCE(s."group", '') AS "group",
+			COALESCE(s.category, '') AS category, s.tag1, s.tag2, s.tag3, s.image_link_1,
+			s.image_link_2, s.image_link_3,
+					COALESCE(s.hex, lower(s.icao)) AS hex, COALESCE(s.flight, '') AS flight, s.seen, COALESCE(s.seen_epoch, 0) AS seen_epoch
+			FROM interesting_aircraft_seen s
+			LEFT JOIN registration_data rd ON rd.mode_s = lower(s.icao)
+			WHERE s."group" = $1
+			ORDER BY s.icao, s.seen DESC
 		)
 		SELECT *
 		FROM latest_unique_reg

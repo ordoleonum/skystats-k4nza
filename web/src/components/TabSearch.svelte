@@ -2,7 +2,7 @@
     // Aircraft search: registration, hex code, callsign, type or operator.
     // Opens directly with ?q=... (the feeder home page links here).
     import { onMount, tick } from 'svelte';
-    import { IconSearch, IconDownload, IconExternalLink, IconPhoto, IconX, IconInfoCircle } from '@tabler/icons-svelte';
+    import { IconSearch, IconDownload, IconExternalLink, IconX, IconInfoCircle, IconPlane, IconHelicopter } from '@tabler/icons-svelte';
     import { units } from '../stores/units';
     import { formatDistanceKm, formatAltitude } from '../lib/units';
 
@@ -231,6 +231,36 @@
         return `https://flightaware.com/live/modes/${encodeURIComponent(d.hex.replace('~', ''))}/redirect`;
     }
     const groupBadge = { Mil: 'Military', Gov: 'Government', Pol: 'Police', Civ: 'Civilian' };
+    const FEEDER_MILITARY = 'Military (feeder database)';
+    // no photo: a plane or helicopter outline with the type, instead of an empty box
+    const HELI = /^(H\d|EC\d|AS\d{2}|A1[0-9]{2}|B06|B4\d\d|B505|R22|R44|R66|S76|S92|UH|AH|CH|MH|EN48|BK17|MI8|NH90)/;
+    const isHelicopter = (d) => HELI.test((d.type || '').toUpperCase()) || /helicopter|copter/i.test((d.model || '') + ' ' + (d.manufacturer || ''));
+
+    // ---------- before searching: group shortcuts and recent interesting aircraft ----------
+    const groupKeys = ['Mil', 'Gov', 'Pol', 'Civ'];
+    const groupEndpoint = { Mil: 'military', Gov: 'government', Pol: 'police', Civ: 'civilian' };
+    let recentInteresting = null;
+    async function loadRecentInteresting() {
+        try {
+            const lists = await Promise.all(groupKeys.map(async (g) => {
+                const res = await fetch(`api/stats/interesting/${groupEndpoint[g]}`);
+                if (!res.ok) return [];
+                return (await res.json()).map((a) => ({ ...a, group: a.group || g }));
+            }));
+            recentInteresting = lists.flat()
+                .filter((a) => a.hex)
+                .sort((a, b) => new Date(b.seen) - new Date(a.seen))
+                .filter((a, i, all) => all.findIndex((x) => x.hex === a.hex) === i) // once per aircraft
+                .slice(0, 10);
+        } catch (e) {
+            recentInteresting = [];
+        }
+    }
+    function pickGroup(g) {
+        group = g;
+        days = '0';
+        runSearch();
+    }
     const groupName = { Mil: 'Military aircraft', Gov: 'Government aircraft', Pol: 'Police aircraft', Civ: 'Civilian aircraft of interest' };
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -245,6 +275,7 @@
             query = q;
             runSearch();
         }
+        loadRecentInteresting();
         const focus = () => setTimeout(() => inputEl?.focus(), 50);
         window.addEventListener('skystats-open-search', focus);
         // a registration clicked in Interesting Aircraft / Record Holders:
@@ -311,6 +342,40 @@
     <div class="alert alert-error mb-6"><span>{error}</span></div>
 {/if}
 
+{#if !group && !results && !loading && !detail && !error}
+    <div class="card bg-base-100 shadow-sm rounded mb-6">
+        <div class="card-body">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm text-base-content/60 mr-1">Show every aircraft seen in a group:</span>
+                {#each groupKeys as g}
+                    <button type="button" class="btn btn-sm btn-outline" on:click={() => pickGroup(g)}>{groupBadge[g]}</button>
+                {/each}
+            </div>
+            {#if recentInteresting && recentInteresting.length}
+                <h3 class="text-lg font-light mt-4 mb-1">Recently seen interesting aircraft</h3>
+                <div class="overflow-x-auto">
+                    <table class="table table-sm">
+                        <tbody>
+                            {#each recentInteresting as a (a.hex)}
+                                <tr class="hover cursor-pointer" on:click={() => openAircraft(a.hex, false)}>
+                                    <td class="font-mono whitespace-nowrap">
+                                        <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex, false)}>{a.registration || a.hex.toUpperCase()}</button>
+                                        <div class="sm:hidden text-xs text-base-content/60 font-sans">{a.operator || ''}</div>
+                                    </td>
+                                    <td class="hidden sm:table-cell">{a.operator || '–'}</td>
+                                    <td class="whitespace-nowrap">{a.icao_type || a.type || '–'}
+                                        {#if groupBadge[a.group]}<span class="badge badge-sm badge-warning ml-1">{groupBadge[a.group]}</span>{/if}</td>
+                                    <td class="whitespace-nowrap text-right">{fmtShortDate(a.seen)}</td>
+                                </tr>
+                            {/each}
+                        </tbody>
+                    </table>
+                </div>
+            {/if}
+        </div>
+    </div>
+{/if}
+
 {#if loading && !results}
     <div class="flex justify-center py-8"><span class="loading loading-ring loading-lg"></span></div>
 {/if}
@@ -336,8 +401,10 @@
                         {/if}
                     </a>
                 {:else}
-                    <div class="w-48 h-32 rounded bg-base-200 flex flex-col items-center justify-center shrink-0 text-base-content/40 text-xs gap-1">
-                        <IconPhoto class="w-8 h-8" />No photo available
+                    <div class="w-48 h-32 rounded bg-base-200 flex flex-col items-center justify-center shrink-0 text-base-content/50 text-xs gap-1" title="No photo of this aircraft yet">
+                        {#if isHelicopter(detail)}<IconHelicopter class="w-14 h-14" stroke={1.2} />{:else}<IconPlane class="w-14 h-14" stroke={1.2} />{/if}
+                        <span class="font-mono text-sm">{detail.type || 'Type unknown'}</span>
+                        <span>No photo yet</span>
                     </div>
                 {/if}
                 <div class="min-w-0">
@@ -350,6 +417,9 @@
                             <span class="badge badge-warning align-middle ml-1">{groupBadge[detail.interesting.group]}</span>
                         {/if}
                     </h3>
+                    {#if detail.interesting?.category === FEEDER_MILITARY}
+                        <p class="text-xs text-base-content/60">Marked military by the feeder's aircraft database (not on the plane-alert list, so no operator or extra details).</p>
+                    {/if}
                     <p class="text-sm text-base-content/70">
                         {[detail.manufacturer, detail.model].filter(Boolean).join(' ')}{detail.type ? ` (${detail.type})` : ''}
                         · hex <span class="font-mono">{detail.hex.toUpperCase()}</span>
@@ -433,9 +503,9 @@
                         <thead>
                             <tr class="uppercase tracking-wider">
                                 <th aria-sort={sortKey === 'reg' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('reg')}>Registration{arrow('reg', sortKey, sortDir)}</button></th>
-                                <th aria-sort={sortKey === 'operator' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('operator')}>Operator{arrow('operator', sortKey, sortDir)}</button></th>
+                                <th class="hidden sm:table-cell" aria-sort={sortKey === 'operator' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('operator')}>Operator{arrow('operator', sortKey, sortDir)}</button></th>
                                 <th aria-sort={sortKey === 'type' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('type')}>Type{arrow('type', sortKey, sortDir)}</button></th>
-                                <th class="text-right" aria-sort={sortKey === 'visits' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('visits')}>Visits{arrow('visits', sortKey, sortDir)}</button></th>
+                                <th class="text-right hidden sm:table-cell" aria-sort={sortKey === 'visits' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('visits')}>Visits{arrow('visits', sortKey, sortDir)}</button></th>
                                 <th aria-sort={sortKey === 'last' ? (sortDir > 0 ? 'ascending' : 'descending') : 'none'}><button type="button" class="uppercase tracking-wider hover:text-primary" on:click={() => sortBy('last')}>Last seen{arrow('last', sortKey, sortDir)}</button></th>
                             </tr>
                         </thead>
@@ -444,15 +514,19 @@
                                 <tr class="hover cursor-pointer {detail?.hex === a.hex ? 'bg-base-200' : ''}" on:click={() => openAircraft(a.hex)}>
                                     <td class="font-mono whitespace-nowrap">
                                         <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex)}>{a.registration || a.hex.toUpperCase()}</button>
+                                        <div class="sm:hidden text-xs text-base-content/60 font-sans whitespace-normal">
+                                            {a.operator || ''}
+                                            {#if groupBadge[a.interesting_group]}<span class="badge badge-xs badge-warning ml-1">{groupBadge[a.interesting_group]}</span>{/if}
+                                        </div>
                                     </td>
-                                    <td>
+                                    <td class="hidden sm:table-cell">
                                         {a.operator || '–'}
                                         {#if groupBadge[a.interesting_group]}
                                             <span class="badge badge-sm badge-warning ml-1">{groupBadge[a.interesting_group]}</span>
                                         {/if}
                                     </td>
-                                    <td class="whitespace-nowrap">{a.model ? `${a.model} (${a.type})` : (a.type || '–')}</td>
-                                    <td class="text-right">{a.visits.toLocaleString()}</td>
+                                    <td class="whitespace-nowrap"><span class="hidden sm:inline">{a.model ? `${a.model} (${a.type})` : (a.type || '–')}</span><span class="sm:hidden font-mono" title={a.model || ''}>{a.type || '–'}</span></td>
+                                    <td class="text-right hidden sm:table-cell">{a.visits.toLocaleString()}</td>
                                     <td class="whitespace-nowrap">{fmtShortDate(a.last_seen)}</td>
                                 </tr>
                             {/each}
