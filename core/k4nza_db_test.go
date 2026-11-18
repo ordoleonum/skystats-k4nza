@@ -375,7 +375,7 @@ func TestSignalChartUsesClosestApproach(t *testing.T) {
 		km := 10.0 + float64(i)*5
 		insertVisit(t, pg, testVisit{hex: fmt.Sprintf("d%05d", i), first: time.Now().Add(-time.Hour), rDstNm: 120, lastKm: 200, minKm: &km})
 	}
-	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET rssi = -31, rssi_at_min = -5 - min_distance / 10 WHERE hex LIKE 'd%'`); err != nil {
+	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET rssi = -45, rssi_at_min = -5 - min_distance / 10 WHERE hex LIKE 'd%'`); err != nil {
 		t.Fatal(err)
 	}
 	getJSON(t, r, "/api/stats/reception/signal/day", &res)
@@ -383,7 +383,7 @@ func TestSignalChartUsesClosestApproach(t *testing.T) {
 		t.Fatalf("with closest-approach data: mode %q, %d points", res.Mode, len(res.Points))
 	}
 	for _, p := range res.Points {
-		if p[1] > -5 || p[1] < -30 {
+		if p[1] > -5 || p[1] < -35 { // first-heard readings are -45
 			t.Errorf("point %v is not a closest-approach reading", p)
 		}
 	}
