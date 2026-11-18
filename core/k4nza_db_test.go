@@ -546,3 +546,31 @@ func TestMarkProcessedMarksEveryRow(t *testing.T) {
 	}
 	MarkProcessed(pg, "lowest_aircraft_processed", nil) // nothing to do, no error
 }
+
+func TestRouteForCallsign(t *testing.T) {
+	pg := testPG(t)
+	if _, err := pg.db.Exec(context.Background(), `
+		INSERT INTO route_data (route_callsign, origin_iata_code, origin_icao_code, origin_name, origin_latitude, origin_longitude,
+		                        destination_iata_code, destination_icao_code, destination_name, destination_latitude, destination_longitude, last_updated)
+		VALUES ('SWA2039', 'MCI', 'KMCI', 'Kansas City International Airport', 39.2976, -94.7139,
+		        'DAL', 'KDAL', 'Dallas Love Field', 32.8471, -96.8518, NOW())`); err != nil {
+		t.Fatal(err)
+	}
+	r := testRouter(pg)
+	var res struct {
+		Origin      routeAirport `json:"origin"`
+		Destination routeAirport `json:"destination"`
+	}
+	if code := getJSON(t, r, "/api/route/swa2039", &res); code != 200 {
+		t.Fatalf("route: HTTP %d", code)
+	}
+	if res.Origin.IATA != "MCI" || res.Destination.IATA != "DAL" || res.Origin.Lat == nil || *res.Destination.Lon > -96 {
+		t.Errorf("route = %+v", res)
+	}
+	if code := getJSON(t, r, "/api/route/AAL1", nil); code != 404 {
+		t.Errorf("unknown callsign: HTTP %d, want 404", code)
+	}
+	if code := getJSON(t, r, "/api/route/bad!", nil); code != 400 {
+		t.Errorf("bad callsign: HTTP %d, want 400", code)
+	}
+}

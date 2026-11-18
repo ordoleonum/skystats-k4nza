@@ -144,6 +144,10 @@ func (s *APIServer) registerRoutes(r *gin.Engine) {
 		api.GET("/search/aircraft/:hex", s.searchAircraft)
 		api.GET("/search/aircraft/:hex/visits.csv", s.searchAircraftCSV)
 
+		// K4NZA: the route SkyStats looked up for a callsign (the live map uses it
+		// when its own lookup can't confirm a route)
+		api.GET("/route/:callsign", s.routeForCallsign)
+
 		// data export
 		export := api.Group("/export")
 		{

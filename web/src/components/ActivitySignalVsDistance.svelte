@@ -236,6 +236,7 @@
             <li><b>Gaps:</b> no aircraft were heard at those distances in this period.</li>
             <li><b>Flat line instead of a slope:</b> the chart is still showing first-heard signals (see the note above the list); it changes once enough closest-approach readings are recorded.</li>
             <li><b>Two flat bands or a jump in the line:</b> the gain changed during the period. Day shows only the newest setting.</li>
+            <li><b>Close aircraft weaker than expected:</b> a vertical antenna hears poorly straight up, so aircraft passing nearly overhead read weaker than their distance suggests. Normal.</li>
             <li><b>Weak dots close in:</b> usually low aircraft partly hidden from the antenna, or weak transponders. A few are normal.</li>
         </ul>
     </details>

@@ -137,7 +137,13 @@
     $: rows = expanded ? shown : shown.slice(0, COLLAPSED);
     const arrow = (key, k, d) => (k === key ? (d > 0 ? ' ▲' : ' ▼') : '');
 
+    let loadingHex = ''; // the result row whose details are loading (shown under it)
     async function openAircraft(hex, fromList = true) {
+        if (fromList && detail?.hex === hex && detail.fromList) {
+            detail = null; // a second click on the open row closes it
+            return;
+        }
+        loadingHex = fromList ? hex : '';
         detailLoading = true;
         error = '';
         try {
@@ -148,11 +154,12 @@
             loadPhoto(body);
             visitsMore = body.visits_list.length === PAGE && body.visits_in_history > PAGE;
             await tick();
-            document.getElementById('search-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.getElementById('search-detail')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } catch (e) {
             error = `Could not load this aircraft: ${e.message}`;
         } finally {
             detailLoading = false;
+            loadingHex = '';
         }
     }
 
@@ -380,11 +387,11 @@
     <div class="flex justify-center py-8"><span class="loading loading-ring loading-lg"></span></div>
 {/if}
 
-{#if detailLoading}
+{#if detailLoading && !loadingHex}
     <div class="flex justify-center py-8"><span class="loading loading-ring loading-lg"></span></div>
 {/if}
 
-{#if detail}
+{#snippet detailCard()}
     <div id="search-detail" class="card bg-base-100 shadow-sm rounded mb-6 scroll-mt-20">
         <div class="card-body">
             {#if detail.fromList && results && results.length > 1}
@@ -483,6 +490,10 @@
             </div>
         </div>
     </div>
+{/snippet}
+
+{#if detail && !detail.fromList}
+    {@render detailCard()}
 {/if}
 
 {#if results && !(detail && !detail.fromList)}
@@ -496,7 +507,7 @@
             {:else}
                 <p class="text-sm text-base-content/60 mb-2">
                     {results.length}{more ? '+' : ''} {group ? searchedFor.toLowerCase() : `aircraft match “${searchedFor}”`}{more ? ` (showing the most recent ${limit})` : ''}.
-                    Click one to see its visits above, or a column heading to sort.
+                    Click one to see its visits, or a column heading to sort.
                 </p>
                 <div class="overflow-x-auto">
                     <table class="table table-sm">
@@ -529,6 +540,11 @@
                                     <td class="text-right hidden sm:table-cell">{a.visits.toLocaleString()}</td>
                                     <td class="whitespace-nowrap">{fmtShortDate(a.last_seen)}</td>
                                 </tr>
+                                {#if detailLoading && loadingHex === a.hex}
+                                    <tr><td colspan="5"><div class="flex justify-center py-4"><span class="loading loading-ring loading-md"></span></div></td></tr>
+                                {:else if detail && detail.fromList && detail.hex === a.hex}
+                                    <tr class="search-detail-row"><td colspan="5" class="px-0 pt-1 pb-3 text-base whitespace-normal">{@render detailCard()}</td></tr>
+                                {/if}
                             {/each}
                         </tbody>
                     </table>
