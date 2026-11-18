@@ -17,6 +17,8 @@
 > [this repository's issues](https://github.com/ordoleonum/skystats-k4nza/issues), not to the original project.
 > The container is published as `ghcr.io/ordoleonum/skystats-k4nza`.
 
+[![Support me on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20this%20build-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/ordoleonum)
+
 
 ## Overview
 
@@ -167,3 +169,7 @@ alter user "skystats-user" password 'NEW_PASS';
 
 ### Motion Stats
 ![MotionStats](docs/screenshots/6_MotionStats.png)
+
+<br/>
+
+If SkyStats-K4NZA is useful to you, you can [support it on Ko-fi](https://ko-fi.com/ordoleonum). 73, K4NZA
