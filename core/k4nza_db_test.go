@@ -8,6 +8,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -315,7 +316,8 @@ func TestClosestDistanceIsTracked(t *testing.T) {
 	now := float64(time.Now().Unix())
 	at := func(km float64) Aircraft {
 		// due north of the station; 1 degree of latitude is about 111 km
-		return Aircraft{Hex: "e00005", Lat: testLat + km/111.0, Lon: testLon}
+		// signal gets stronger as it comes closer, so each distance has its own reading
+		return Aircraft{Hex: "e00005", Lat: testLat + km/111.0, Lon: testLon, Rssi: -10 - km/2}
 	}
 	forceWrite := func() {
 		if e := pg.recentAircraftCache["e00005"]; e != nil {
@@ -337,6 +339,53 @@ func TestClosestDistanceIsTracked(t *testing.T) {
 	}
 	if rows != 1 || math.Abs(minKm-12) > 0.5 {
 		t.Errorf("rows=%d closest=%v km, want 1 row and about 12 km", rows, minKm)
+	}
+	// the signal recorded goes with the closest distance (12 km: -16 dBFS),
+	// not the first (50 km) or the latest (40 km)
+	var rssiAtMin float64
+	if err := pg.db.QueryRow(ctx, `SELECT rssi_at_min::float8 FROM aircraft_data WHERE hex = 'e00005'`).Scan(&rssiAtMin); err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(rssiAtMin-(-16)) > 0.3 {
+		t.Errorf("rssi_at_min = %v, want about -16 (the signal at 12 km)", rssiAtMin)
+	}
+}
+
+func TestSignalChartUsesClosestApproach(t *testing.T) {
+	pg := testPG(t)
+	ctx := context.Background()
+	r := testRouter(pg)
+	type signal struct {
+		Points [][2]float64 `json:"points"`
+		Mode   string       `json:"mode"`
+	}
+	// older visits: only the first-heard signal
+	for i := 0; i < 10; i++ {
+		insertVisit(t, pg, testVisit{hex: "c0000" + string(rune('0'+i)), first: time.Now().Add(-time.Hour), rDstNm: 100, lastKm: 150})
+	}
+	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET rssi = -30`); err != nil {
+		t.Fatal(err)
+	}
+	var res signal
+	if code := getJSON(t, r, "/api/stats/reception/signal/day", &res); code != 200 || res.Mode != "first_heard" || len(res.Points) != 10 {
+		t.Fatalf("without closest-approach data: HTTP %d, mode %q, %d points", code, res.Mode, len(res.Points))
+	}
+	// enough closest-approach readings: those are used
+	for i := 0; i < signalMinClosest; i++ {
+		km := 10.0 + float64(i)*5
+		insertVisit(t, pg, testVisit{hex: fmt.Sprintf("d%05d", i), first: time.Now().Add(-time.Hour), rDstNm: 120, lastKm: 200, minKm: &km})
+	}
+	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET rssi = -31, rssi_at_min = -5 - min_distance / 10 WHERE hex LIKE 'd%'`); err != nil {
+		t.Fatal(err)
+	}
+	getJSON(t, r, "/api/stats/reception/signal/day", &res)
+	if res.Mode != "closest" || len(res.Points) != signalMinClosest {
+		t.Fatalf("with closest-approach data: mode %q, %d points", res.Mode, len(res.Points))
+	}
+	for _, p := range res.Points {
+		if p[1] > -5 || p[1] < -30 {
+			t.Errorf("point %v is not a closest-approach reading", p)
+		}
 	}
 }
 

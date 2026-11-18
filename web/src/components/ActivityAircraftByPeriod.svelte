@@ -42,6 +42,7 @@
       {:else if selectedTab === 2}
           <FlightsByPeriod type="aircraft" period="year"/>
       {/if}
+      <p class="text-xs opacity-60 mt-3">Different aircraft heard in each hour, day or month; a sudden drop that isn't a quiet time of day can mean a reception problem.</p>
   </div>
 
 

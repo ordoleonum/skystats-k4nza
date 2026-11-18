@@ -54,6 +54,7 @@
       {:else if selectedTab === 3}
           <AircraftByPeriod period="all" type={aircraftorflight}/>
       {/if}
+      <p class="text-xs opacity-60 mt-3">{aircraftorflight === 'flights' ? 'The aircraft types you hear most, counted once per flight.' : 'The aircraft types you hear most, each aircraft counted once however often it flies over.'}</p>
   </div>
 </div>
 

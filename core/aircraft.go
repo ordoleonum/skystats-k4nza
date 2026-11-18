@@ -303,11 +303,12 @@ func insertNewAircrafts(pg *postgres, nowEpoch float64, existingAircrafts map[st
 					seen,
 					rssi,
 					db_flags,
-					min_distance
+					min_distance,
+					rssi_at_min
 				) VALUES (
 					$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
 					$16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
-					$29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44
+					$29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45
 				)`
 
 			batch.Queue(insertStatement,
@@ -354,7 +355,8 @@ func insertNewAircrafts(pg *postgres, nowEpoch float64, existingAircrafts map[st
 				aircraft.Seen,
 				aircraft.Rssi,
 				aircraft.DbFlags,
-				*lastSeenDistance)
+				*lastSeenDistance,
+				aircraft.Rssi)
 		}
 	}
 
@@ -412,9 +414,16 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 		// missed when the aircraft is only written every 30 s
 		cacheEntry := pg.recentAircraftCache[aircraft.Hex]
 		closest := *lastSeenDistance
+		closestRssi := aircraft.Rssi
 		if cacheEntry != nil {
-			cacheEntry.pendingMin = minPositive(cacheEntry.pendingMin, closest)
-			closest = cacheEntry.pendingMin
+			if closest > 0 && (cacheEntry.pendingMin <= 0 || closest < cacheEntry.pendingMin) {
+				cacheEntry.pendingMin = closest
+				cacheEntry.pendingRssi = aircraft.Rssi
+			}
+			if cacheEntry.pendingMin > 0 {
+				closest = cacheEntry.pendingMin
+				closestRssi = cacheEntry.pendingRssi
+			}
 		}
 
 		// Update barometric altitude & geometric altitudes if higher than already stored
@@ -482,7 +491,10 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 								ias = $11,
 								tas = $12,
 								flight = $13,
-								min_distance = LEAST(min_distance, $15)
+								min_distance = LEAST(min_distance, $15),
+								-- the signal goes with the closest distance (old value of min_distance here)
+								rssi_at_min = CASE WHEN $15 > 0 AND (min_distance IS NULL OR $15 < min_distance)
+								                   THEN $16 ELSE rssi_at_min END
 							WHERE id = $14`
 
 		batch.Queue(
@@ -502,6 +514,7 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 			existingAircraft.Flight,
 			existingAircraft.Id,
 			closest,
+			closestRssi,
 		)
 	}
 

@@ -194,7 +194,7 @@
         </div>
     </div>
     <div class="flex gap-4 text-xs opacity-70 mb-2 flex-wrap">
-        <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-primary"></span>One aircraft (when first heard)</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-primary"></span>{data?.mode === 'first_heard' ? 'One aircraft (when first heard)' : 'One aircraft (at its closest)'}</span>
         <span class="flex items-center gap-1"><span class="inline-block w-4 border-t-2 border-base-content"></span>Median</span>
         <span class="flex items-center gap-1"><span class="inline-block w-4 border-t-2 border-dashed border-warning"></span>Overload ({OVERLOAD_DB} dB)</span>
     </div>
@@ -212,18 +212,29 @@
             <canvas bind:this={canvas}></canvas>
         </div>
     {/if}
-    <p class="text-xs opacity-60 mt-3">
-        A healthy band slopes down. Dots piled at the dashed line mean the gain is too high.
-    </p>
+    {#if data?.mode === 'first_heard'}
+        <div class="alert alert-info text-sm mt-3">
+            <span>Collecting closest-approach readings. Until there are enough for this period, the chart shows
+            the signal when each aircraft was first heard: that is nearly always the weakest signal the receiver
+            can decode, so it looks like a flat line (your detection floor) whatever the distance.</span>
+        </div>
+    {:else}
+        <p class="text-xs opacity-60 mt-3">
+            Each dot is the signal when the aircraft was closest. A healthy band slopes down. Dots piled at the
+            dashed line mean the gain is too high.
+        </p>
+    {/if}
     <details class="text-sm mt-2">
         <summary class="cursor-pointer opacity-80">How to read this chart</summary>
         <ul class="list-disc ml-5 mt-2 space-y-1 opacity-80">
-            <li><b>Healthy:</b> a thick band running from the top left (close and strong) down to the bottom right (far and weak), with a smooth median line through it.</li>
+            <li><b>Healthy:</b> a thick band running from the top left (close and strong) down to the bottom right (far and weak), with a smooth median line through it. Each dot is an aircraft's signal at its closest to you.</li>
             <li><b>Gain too high:</b> many close aircraft sit on or above the dashed overload line and the top of the band looks flattened. Lower the gain a step.</li>
             <li><b>Gain too low or a weak antenna:</b> the whole band sits low and thins out early, with few dots far away.</li>
             <li><b>Band stops at a distance:</b> that is about where hills, buildings or the horizon block the signal. Compare with Range by Direction.</li>
             <li><b>Wavy or stepped median:</b> only a few aircraft at those distances, so the median jumps around. Week or Month smooths it out.</li>
             <li><b>Gaps:</b> no aircraft were heard at those distances in this period.</li>
+            <li><b>Flat line instead of a slope:</b> the chart is still showing first-heard signals (see the note above the list); it changes once enough closest-approach readings are recorded.</li>
+            <li><b>Two flat bands or a jump in the line:</b> the gain changed during the period. Day shows only the newest setting.</li>
             <li><b>Weak dots close in:</b> usually low aircraft partly hidden from the antenna, or weak transponders. A few are normal.</li>
         </ul>
     </details>

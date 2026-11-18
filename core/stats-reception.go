@@ -159,26 +159,47 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 
 	maxNm := maxPlausibleNm()
 
-	base := `FROM aircraft_data
-		WHERE first_seen >= $2
-		  AND r_dst > 0 AND r_dst < $1
-		  AND rssi IS NOT NULL AND rssi < 0 AND rssi > -60`
 	since := receptionSince(interval)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// An even sample of about signalSamplePoints visits: every n-th row by id.
-	// (ORDER BY random() would have to sort every row in the period first.)
+	// K4NZA: the signal at each visit's closest approach (rssi_at_min), which
+	// falls with distance and shows gain and antenna quality. Visits recorded
+	// before that existed only have the signal from when the aircraft was
+	// first heard, which is nearly always the weakest the receiver can decode
+	// (a flat line at the detection floor); those are used only while there
+	// isn't enough closest-approach data yet.
+	mode := "closest"
+	dist, sig := "(min_distance / 1.852)", "rssi_at_min"
+	base := `FROM aircraft_data
+		WHERE first_seen >= $2
+		  AND min_distance > 0 AND min_distance / 1.852 < $1
+		  AND rssi_at_min IS NOT NULL AND rssi_at_min < 0 AND rssi_at_min > -49`
 	var total int64
 	if err := s.pg.db.QueryRow(ctx, `SELECT COUNT(*) `+base, maxNm, since).Scan(&total); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	if total < signalMinClosest {
+		mode = "first_heard"
+		dist, sig = "r_dst", "rssi"
+		base = `FROM aircraft_data
+		WHERE first_seen >= $2
+		  AND r_dst > 0 AND r_dst < $1
+		  AND rssi IS NOT NULL AND rssi < 0 AND rssi > -60`
+		if err := s.pg.db.QueryRow(ctx, `SELECT COUNT(*) `+base, maxNm, since).Scan(&total); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// An even sample of about signalSamplePoints visits: every n-th row by id.
+	// (ORDER BY random() would have to sort every row in the period first.)
 	every := sampleEvery(total, signalSamplePoints)
 
 	rows, err := s.pg.db.Query(ctx,
-		`SELECT r_dst::float8, rssi::float8 `+base+` AND id % $3 = 0 LIMIT $4`, maxNm, since, every, signalSamplePoints)
+		`SELECT `+dist+`::float8, `+sig+`::float8 `+base+` AND id % $3 = 0 LIMIT $4`, maxNm, since, every, signalSamplePoints)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -196,8 +217,8 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 	rows.Close()
 
 	rows, err = s.pg.db.Query(ctx,
-		`SELECT floor(r_dst / 10)::int * 10 + 5 AS mid,
-		        percentile_cont(0.5) WITHIN GROUP (ORDER BY rssi::float8),
+		`SELECT floor(`+dist+` / 10)::int * 10 + 5 AS mid,
+		        percentile_cont(0.5) WITHIN GROUP (ORDER BY `+sig+`::float8),
 		        count(*) `+base+`
 		 GROUP BY 1 HAVING count(*) >= 3 ORDER BY 1`, maxNm, since)
 	if err != nil {
@@ -220,10 +241,14 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"points": points,
 		"median": median,
+		"mode":   mode,
 	})
 }
 
 const signalSamplePoints = 2500
+
+// signalMinClosest: closest-approach readings needed before the chart uses them
+const signalMinClosest = 50
 
 // sampleEvery returns n so that taking every n-th row of total rows gives
 // about want rows.

@@ -37,6 +37,9 @@ const rollupGrace = 2 * time.Hour
 var k4nzaSchemaStatements = []string{
 	// closest distance (km) of each visit; NULL for visits recorded before this existed
 	`ALTER TABLE aircraft_data ADD COLUMN IF NOT EXISTS min_distance NUMERIC(8,2)`,
+	// signal (dBFS) at the closest distance, for the Signal vs Distance chart;
+	// NULL for visits recorded before this existed
+	`ALTER TABLE aircraft_data ADD COLUMN IF NOT EXISTS rssi_at_min REAL`,
 	`CREATE TABLE IF NOT EXISTS k4nza_aircraft_seen (
 		hex           TEXT PRIMARY KEY,
 		t             TEXT,

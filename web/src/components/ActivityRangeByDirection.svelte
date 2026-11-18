@@ -201,4 +201,15 @@
     <p class="text-xs opacity-60 mt-3">
         A dent in the shape means something is blocking the antenna in that direction.
     </p>
+    <details class="text-sm mt-2">
+        <summary class="cursor-pointer opacity-80">How to read this chart</summary>
+        <ul class="list-disc ml-5 mt-2 space-y-1 opacity-80">
+            <li><b>The shape:</b> the farthest aircraft heard in each direction, with your station in the middle. Bigger means more range.</li>
+            <li><b>Healthy:</b> a fairly round shape that reaches about as far as the radio horizon (usually 200 to 250 mi for airliners at cruise height).</li>
+            <li><b>Dent or flat side:</b> something blocks the antenna that way: a roof, chimney, tree, hill or wiring. A higher or clearer antenna spot helps.</li>
+            <li><b>Spikes:</b> a few aircraft heard unusually far, often during unusual weather (tropospheric ducting). Not a fault.</li>
+            <li><b>Smaller than the dashed line:</b> fewer or lower aircraft in this period, or reception got worse. If it stays small for days, check the antenna, cable and gain.</li>
+            <li><b>Lopsided towards busy airways:</b> normal; directions with few flights fill in more slowly. Month and All smooth it out.</li>
+        </ul>
+    </details>
 </div>
