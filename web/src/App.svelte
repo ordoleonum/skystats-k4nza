@@ -33,6 +33,19 @@
     }
   }
 
+  // the SkyStats-K4NZA title: back to the dashboard (first tab, top of the page,
+  // no ?q= / ?group= left in the address)
+  function goHome() {
+      activeTab = 'activity';
+      try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('q');
+          url.searchParams.delete('group');
+          history.replaceState(null, '', url);
+      } catch (e) { /* ignore */ }
+      window.scrollTo({ top: 0 });
+  }
+
   function openSettingsModal() {
       document.getElementById("settings-modal").showModal();
   }
@@ -70,7 +83,7 @@
   </div>
   <div class="navbar-center">
     <h1 class="text-2xl md:text-3xl lg:text-4xl font-normal text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] leading-none text-center">
-      SkyStats<span class="hidden md:inline">-K4NZA</span><span class="block md:hidden text-xs tracking-[0.3em]">K4NZA</span>
+      <a href="./" class="cursor-pointer" title="Back to the dashboard" on:click|preventDefault={goHome}>SkyStats<span class="hidden md:inline">-K4NZA</span><span class="block md:hidden text-xs tracking-[0.3em]">K4NZA</span></a>
     </h1>
   </div>
   <div class="navbar-end flex-1 md:flex-none">
