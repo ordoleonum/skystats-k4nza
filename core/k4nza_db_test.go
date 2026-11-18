@@ -352,6 +352,9 @@ func TestFeederMilitaryIsTaggedMil(t *testing.T) {
 	if _, err := pg.db.Exec(ctx, `
 		UPDATE aircraft_data SET db_flags = 1 WHERE hex IN ('ae0001', 'aeefbb');
 		UPDATE aircraft_data SET db_flags = 0 WHERE hex = 'a00001';
+		-- the feeder always fills these in (the interesting job can't read empty ones)
+		UPDATE aircraft_data SET alt_geom = 0, ias = 0, tas = 0, track = 0, baro_rate = 0,
+		                         lat = 0, lon = 0, alert = 0;
 		INSERT INTO interesting_aircraft (icao, registration, operator, "group", category)
 		VALUES ('AE0001', '61-0277', 'United States Air Force', 'Mil', 'Tanker')`); err != nil {
 		t.Fatal(err)
