@@ -21,6 +21,17 @@
         image3: true
     };
 
+    // "Today 7:24 PM", "Yesterday 6:39 PM", "Nov 16 2:25 PM" - as in Search
+    function fmtSeen(v) {
+        if (!v) return '–';
+        const d = new Date(v), now = new Date(), y = new Date(now);
+        y.setDate(now.getDate() - 1);
+        const day = d.toDateString() === now.toDateString() ? 'Today'
+            : d.toDateString() === y.toDateString() ? 'Yesterday'
+            : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+        return `${day} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+    }
+
     async function fetchData() {
         
         try {
@@ -117,12 +128,12 @@
                             <tr class="hover:bg-base-300 cursor-pointer" on:click={() => showAircraftModal(aircraft)}>
                                 <td class="font-mono whitespace-nowrap">
                                     {#if aircraft.registration}
-                                        <button type="button" class="link link-hover text-accent font-mono" title="Search your history for {aircraft.registration}" on:click|stopPropagation={() => searchFor(aircraft.registration)}>{aircraft.registration}</button>
+                                        <button type="button" class="link link-hover text-primary font-mono" title="Search your history for {aircraft.registration}" on:click|stopPropagation={() => searchFor(aircraft.registration)}>{aircraft.registration}</button>
                                     {:else}-{/if}
                                 </td>
-                                <td>{aircraft.operator}</td>
-                                <td>{aircraft.type}</td>
-                                <td class="whitespace-nowrap">{aircraft.seen ? new Date(aircraft.seen).toLocaleString() : '-'}</td>
+                                <td>{aircraft.operator || '–'}</td>
+                                <td>{aircraft.type || aircraft.icao_type || '–'}</td>
+                                <td class="whitespace-nowrap">{fmtSeen(aircraft.seen)}</td>
                             </tr>
                             {/each}
                         </tbody>
@@ -138,7 +149,7 @@
     <div class="modal-box max-w-4xl">
         {#if selectedAircraft}
             <div class="flex items-center justify-between mb-2">
-                <h3 class="text-lg font-bold">{selectedAircraft.registration} - {selectedAircraft.type}</h3>
+                <h3 class="text-lg font-bold">{selectedAircraft.registration || selectedAircraft.icao}{selectedAircraft.type ? ` - ${selectedAircraft.type}` : ""}</h3>
                 {#if disableTags === false}
                     <div class="flex gap-2">
                         {#if selectedAircraft.tag1}

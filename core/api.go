@@ -1544,12 +1544,14 @@ func (s *APIServer) getRecentSeenMetrics(c *gin.Context) {
 
 	query := `
 		SELECT
-			COUNT(*) FILTER (WHERE DATE(first_seen AT TIME ZONE $1) = CURRENT_DATE) as today_flights,
+			COUNT(*) FILTER (WHERE first_seen >= DATE_TRUNC('day', NOW(), $1)) as today_flights,
 			COUNT(*) FILTER (WHERE first_seen >= NOW() - INTERVAL '1 hour') as hour_flights,
-			COUNT(DISTINCT CASE WHEN DATE(first_seen AT TIME ZONE $1) = CURRENT_DATE THEN hex END) as today_aircraft,
+			COUNT(DISTINCT CASE WHEN first_seen >= DATE_TRUNC('day', NOW(), $1) THEN hex END) as today_aircraft,
 			COUNT(DISTINCT CASE WHEN first_seen >= NOW() - INTERVAL '1 hour' THEN hex END) as hour_aircraft
 		FROM aircraft_data
-		WHERE first_seen >= CURRENT_DATE AT TIME ZONE $1 - INTERVAL '1 day'
+		-- "today" is the local day ($1): CURRENT_DATE is the database's (UTC) day,
+		-- which in the Americas starts in the evening, so today read 0 until midnight
+		WHERE first_seen >= LEAST(DATE_TRUNC('day', NOW(), $1), NOW() - INTERVAL '1 hour')
 	`
 
 	var todayFlights, hourFlights, todayAircraft, hourAircraft int

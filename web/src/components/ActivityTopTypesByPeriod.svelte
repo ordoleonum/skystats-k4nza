@@ -7,9 +7,9 @@
 
 <div class="bg-base-100 rounded-box shadow-md pt-6 p-8">
     <div>
-      <div class="flex justify-between items-center mb-6">
+      <div class="flex flex-wrap justify-between items-center gap-2 mb-6">
       <h2 class="text-2xl font-extralight tracking-wider ">{title}</h2>
-      <div class="tabs tabs-box">
+      <div class="tabs tabs-box flex-nowrap">
         <input
           type="radio"
           name="activity_tabs_{aircraftorflight}_types"

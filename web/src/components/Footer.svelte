@@ -37,7 +37,7 @@
         <div class="text-sm">{data.version} • {data.commit} • {data.date.toLocaleString()}</div>
     {:else}
         <div class="text-sm">
-            <a href="https://github.com/ordoleonum/skystats-k4nza" target="_blank" rel="noopener noreferrer" class="hover:text-primary transition-colors">SkyStats-K4NZA</a> • {data.version}
+            <p><a href="https://github.com/ordoleonum/skystats-k4nza" target="_blank" rel="noopener noreferrer" class="hover:text-primary transition-colors">SkyStats-K4NZA</a> • {data.version}</p>
         </div>
     {/if}
 </footer>

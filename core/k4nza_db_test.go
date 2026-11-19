@@ -574,3 +574,30 @@ func TestRouteForCallsign(t *testing.T) {
 		t.Errorf("bad callsign: HTTP %d, want 400", code)
 	}
 }
+
+// "Today" is the viewer's local day. It used to compare with the database's UTC
+// date, so in the Americas it read 0 every evening (after 00:00 UTC) while
+// "past hour" showed traffic. One of these zones is always on a different date
+// from UTC, whatever time the test runs.
+func TestTodayCountsUseTheLocalDay(t *testing.T) {
+	pg := testPG(t)
+	r := testRouter(pg)
+	insertVisit(t, pg, testVisit{hex: "e00001", first: time.Now().Add(-2 * time.Minute), rDstNm: 50, lastKm: 80})
+	insertVisit(t, pg, testVisit{hex: "e00002", first: time.Now().Add(-3 * time.Minute), rDstNm: 50, lastKm: 80})
+	for _, tz := range []string{"Pacific/Pago_Pago", "Pacific/Kiritimati", "America/Chicago", "UTC"} {
+		loc, _ := time.LoadLocation(tz)
+		local := time.Now().In(loc)
+		if local.Hour() == 0 && local.Minute() < 5 {
+			continue // local midnight just passed: the visits really were yesterday
+		}
+		var res struct {
+			TodayFlights  int `json:"today_flights"`
+			HourFlights   int `json:"hour_flights"`
+			TodayAircraft int `json:"today_aircraft"`
+		}
+		getJSON(t, r, "/api/stats/seen/recent?tz="+tz, &res)
+		if res.HourFlights != 2 || res.TodayFlights != 2 || res.TodayAircraft != 2 {
+			t.Errorf("%s: today %d flights / %d aircraft, past hour %d (want 2 each)", tz, res.TodayFlights, res.TodayAircraft, res.HourFlights)
+		}
+	}
+}

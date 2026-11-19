@@ -95,12 +95,12 @@
           <IconSearch class="h-5 w-5" /><span class="hidden sm:inline">Search</span>
       </button>
     </div>
-    <div class="tooltip tooltip-bottom" data-tip="Download your recorded data (CSV / ZIP)">
+    <div class="tooltip tooltip-left" data-tip="Download your recorded data (CSV / ZIP)">
       <button class="btn btn-ghost btn-sm gap-1 mr-1" on:click={openExport} aria-label="Export data">
           <IconDownload class="h-5 w-5" /><span class="hidden sm:inline">Export</span>
       </button>
     </div>
-    <div class="tooltip tooltip-bottom" data-tip="Display settings and about">
+    <div class="tooltip tooltip-left" data-tip="Display settings and about">
       <button
           class="btn btn-ghost btn-circle"
           on:click={() => openSettingsModal()}

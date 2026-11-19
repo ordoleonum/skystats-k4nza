@@ -186,7 +186,7 @@
 <div class="bg-base-100 rounded-box shadow-md pt-6 p-8">
     <div class="flex justify-between items-center mb-2 gap-2 flex-wrap">
         <h2 class="text-2xl font-extralight tracking-wider">Signal vs Distance</h2>
-        <div class="tabs tabs-box">
+        <div class="tabs tabs-box flex-nowrap">
             {#each periods as p}
                 <input type="radio" name="activity_tabs_signal" class="tab" aria-label={p.label}
                     checked={selected === p.key} on:change={() => pick(p.key)} />
