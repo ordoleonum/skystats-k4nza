@@ -426,21 +426,21 @@ func (s *APIServer) searchAircraft(c *gin.Context) {
 			info["type"] = icaoType
 		}
 	}
-	var iaOperator, iaGroup, iaCategory, iaLink, tag1, tag2, tag3 string
+	var iaOperator, iaGroup, iaCategory, iaLink, iaType, tag1, tag2, tag3 string
 	if err := s.pg.db.QueryRow(ctx, `
 		SELECT COALESCE(operator, ''), COALESCE("group", ''), COALESCE(category, ''), COALESCE(link, ''),
-		       COALESCE(tag1, ''), COALESCE(tag2, ''), COALESCE(tag3, '')
+		       COALESCE(type, ''), COALESCE(tag1, ''), COALESCE(tag2, ''), COALESCE(tag3, '')
 		FROM (
-			SELECT 1 AS o, operator, "group", category, link, tag1, tag2, tag3
+			SELECT 1 AS o, operator, "group", category, link, type, tag1, tag2, tag3
 			FROM interesting_aircraft WHERE icao = upper($1)
 			UNION ALL
-			SELECT 2, operator, "group", category, link, tag1, tag2, tag3
+			SELECT 2, operator, "group", category, link, type, tag1, tag2, tag3
 			FROM interesting_aircraft_seen WHERE icao = upper($1)
 		) x ORDER BY o LIMIT 1`, hex).
-		Scan(&iaOperator, &iaGroup, &iaCategory, &iaLink, &tag1, &tag2, &tag3); err == nil {
+		Scan(&iaOperator, &iaGroup, &iaCategory, &iaLink, &iaType, &tag1, &tag2, &tag3); err == nil {
 		info["interesting"] = gin.H{
 			"operator": iaOperator, "group": iaGroup, "category": iaCategory, "link": iaLink,
-			"tags": []string{tag1, tag2, tag3},
+			"type": iaType, "tags": []string{tag1, tag2, tag3},
 		}
 	}
 

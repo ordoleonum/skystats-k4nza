@@ -165,7 +165,8 @@
 
     // Photo from planespotters.net (as on the aircraft card at the top of
     // SkyStats), credited to the photographer; the registration lookup's photo
-    // is the fallback.
+    // is the fallback, then a photo of the aircraft TYPE from Wikipedia (clearly
+    // labelled as not this aircraft).
     async function loadPhoto(d) {
         photo = null;
         const hex = d.hex;
@@ -181,7 +182,46 @@
         if (!found && d.photo_thumbnail) {
             found = { src: d.photo_thumbnail, link: d.photo || d.photo_thumbnail, photographer: '' };
         }
+        if (!found) found = await typePhoto(d);
         if (detail?.hex === hex) photo = found; // still the same aircraft
+    }
+
+    // Wikipedia's photo of the aircraft TYPE. Searched by the full name first
+    // (registration lookup, then plane-alert-db), then by the ICAO type code.
+    // A result is only used if Wikipedia describes it as an aircraft: bare codes
+    // also find engines, ships and lists (T38 is also an engine).
+    const WIKI_AIRCRAFT = /aircraft|airliner|trainer|fighter|helicopter|bomber|tanker|airlifter|airplane|aeroplane|jet|plane|glider|gunship/i;
+    const WIKI_NOT = /engine|list of|family of|disambiguation|airport|airline|company|manufacturer|ship|car|vehicle/i;
+    async function typePhoto(d) {
+        const model = (d.model || '').trim();
+        const maker = (d.manufacturer || '').trim();
+        const names = [];
+        if (model) names.push(maker && !model.toLowerCase().includes(maker.toLowerCase().split(' ')[0]) ? `${maker} ${model}` : model);
+        if (d.interesting?.type) names.push(d.interesting.type.trim());
+        if (d.type) names.push(d.type.trim());
+        for (const name of [...new Set(names)]) {
+            try {
+                const url = 'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=5' +
+                    '&prop=pageimages|description&piprop=thumbnail&pithumbsize=400&format=json&origin=*&gsrsearch=' +
+                    encodeURIComponent(`${name} aircraft`);
+                const res = await fetch(url);
+                if (!res.ok) return null;
+                const pages = Object.values((await res.json()).query?.pages || {}).sort((a, b) => a.index - b.index);
+                const page = pages.find((p) => p.thumbnail?.source && WIKI_AIRCRAFT.test(p.description || '') &&
+                    !WIKI_NOT.test(`${p.description || ''} ${p.title}`));
+                if (page) {
+                    return {
+                        src: page.thumbnail.source,
+                        link: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/ /g, '_'))}`,
+                        photographer: 'Wikipedia',
+                        typical: d.type || model,
+                    };
+                }
+            } catch (e) {
+                return null; // offline or blocked: the outline is shown
+            }
+        }
+        return null;
     }
 
     async function loadMoreVisits() {
@@ -372,7 +412,7 @@
                                     <td class="hidden sm:table-cell">{a.operator || '–'}</td>
                                     <td class="whitespace-nowrap">{a.icao_type || a.type || '–'}
                                         {#if groupBadge[a.group]}<span class="badge badge-sm grp-badge grp-{a.group} ml-1">{groupBadge[a.group]}</span>{/if}</td>
-                                    <td class="whitespace-nowrap text-right">{fmtShortDate(a.seen)}</td>
+                                    <td class="whitespace-nowrap text-right">{fmtDate(a.seen)}</td>
                                 </tr>
                             {/each}
                         </tbody>
@@ -401,8 +441,11 @@
             {/if}
             <div class="flex flex-col sm:flex-row gap-4 items-start">
                 {#if photo}
-                    <a href={photo.link} target="_blank" rel="noopener noreferrer" class="relative shrink-0 block" title="Open the photo">
-                        <img src={photo.src} alt="Photo of {detail.registration || detail.hex.toUpperCase()}" class="w-48 h-32 object-cover rounded" loading="lazy" referrerpolicy="no-referrer" />
+                    <a href={photo.link} target="_blank" rel="noopener noreferrer" class="relative shrink-0 block" title={photo.typical ? 'A photo of this type of aircraft, from Wikipedia' : 'Open the photo'}>
+                        <img src={photo.src} alt={photo.typical ? `Typical ${photo.typical}` : `Photo of ${detail.registration || detail.hex.toUpperCase()}`} class="w-48 h-32 object-cover rounded" loading="lazy" referrerpolicy="no-referrer" />
+                        {#if photo.typical}
+                            <span class="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">Typical {photo.typical} – not this aircraft</span>
+                        {/if}
                         {#if photo.photographer}
                             <span class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">© {photo.photographer}</span>
                         {/if}
@@ -538,7 +581,7 @@
                                     </td>
                                     <td class="whitespace-nowrap"><span class="hidden sm:inline">{a.model ? `${a.model} (${a.type})` : (a.type || '–')}</span><span class="sm:hidden font-mono" title={a.model || ''}>{a.type || '–'}</span></td>
                                     <td class="text-right hidden sm:table-cell">{a.visits.toLocaleString()}</td>
-                                    <td class="whitespace-nowrap">{fmtShortDate(a.last_seen)}</td>
+                                    <td class="whitespace-nowrap">{fmtDate(a.last_seen)}</td>
                                 </tr>
                                 {#if detailLoading && loadingHex === a.hex}
                                     <tr><td colspan="5"><div class="flex justify-center py-4"><span class="loading loading-ring loading-md"></span></div></td></tr>
