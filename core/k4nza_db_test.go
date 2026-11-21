@@ -601,3 +601,60 @@ func TestTodayCountsUseTheLocalDay(t *testing.T) {
 		}
 	}
 }
+
+// The feeder home summary: hour counts, aircraft never seen before today,
+// farthest with a compass direction and the rarest type heard today.
+func TestK4nzaHomeSummary(t *testing.T) {
+	now := time.Now().UTC()
+	if now.Hour() == 0 && now.Minute() < 10 {
+		t.Skip("too close to midnight UTC")
+	}
+	pg := testPG(t)
+	r := testRouter(pg)
+	recent := now.Add(-3 * time.Minute)
+	insertVisit(t, pg, testVisit{hex: "a00001", t: "B738", first: now.Add(-72 * time.Hour), rDstNm: 40, rDir: 10})
+	insertVisit(t, pg, testVisit{hex: "a00001", t: "B738", first: recent, rDstNm: 200, rDir: 290})
+	insertVisit(t, pg, testVisit{hex: "a00002", t: "B738", first: recent, rDstNm: 50, rDir: 90})
+	insertVisit(t, pg, testVisit{hex: "a00003", t: "H27J", first: recent, rDstNm: 30, rDir: 180})
+	var res struct {
+		Hours    []int64 `json:"hours"`
+		Today    int64   `json:"aircraft_today"`
+		New      int64   `json:"new_today"`
+		Farthest struct {
+			Hex string  `json:"hex"`
+			Nm  float64 `json:"distance_nm"`
+			Dir string  `json:"direction"`
+		} `json:"farthest"`
+		Rarest struct {
+			Type  string `json:"type"`
+			Count int64  `json:"times_ever"`
+		} `json:"rarest"`
+	}
+	if code := getJSON(t, r, "/api/k4nza/home", &res); code != 200 {
+		t.Fatalf("HTTP %d", code)
+	}
+	var sum int64
+	for _, n := range res.Hours {
+		sum += n
+	}
+	if len(res.Hours) != 24 || sum != 3 {
+		t.Errorf("hours: %d buckets adding up to %d, want 24 and 3", len(res.Hours), sum)
+	}
+	if res.Today != 3 || res.New != 2 {
+		t.Errorf("today %d, new %d; want 3 and 2 (a00001 was seen 3 days ago)", res.Today, res.New)
+	}
+	if res.Farthest.Hex != "a00001" || res.Farthest.Nm != 200 || res.Farthest.Dir != "WNW" {
+		t.Errorf("farthest %+v, want a00001 200 nm WNW", res.Farthest)
+	}
+	if res.Rarest.Type != "H27J" || res.Rarest.Count != 1 {
+		t.Errorf("rarest %+v, want H27J seen once", res.Rarest)
+	}
+}
+
+func TestCompass(t *testing.T) {
+	for deg, want := range map[float64]string{0: "N", 359: "N", 22.5: "NNE", 90: "E", 290: "WNW", -90: "W", 725: "N"} {
+		if got := compass(deg); got != want {
+			t.Errorf("compass(%v) = %s, want %s", deg, got, want)
+		}
+	}
+}

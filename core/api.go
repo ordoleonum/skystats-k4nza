@@ -147,6 +147,8 @@ func (s *APIServer) registerRoutes(r *gin.Engine) {
 		// K4NZA: the route SkyStats looked up for a callsign (the live map uses it
 		// when its own lookup can't confirm a route)
 		api.GET("/route/:callsign", s.routeForCallsign)
+		// the feeder home page summary (k4nza-home.go)
+		api.GET("/k4nza/home", s.k4nzaHome)
 
 		// data export
 		export := api.Group("/export")
