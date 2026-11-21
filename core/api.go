@@ -149,6 +149,8 @@ func (s *APIServer) registerRoutes(r *gin.Engine) {
 		api.GET("/route/:callsign", s.routeForCallsign)
 		// the feeder home page summary (k4nza-home.go)
 		api.GET("/k4nza/home", s.k4nzaHome)
+		// the Activity tab report (k4nza-report.go)
+		api.GET("/k4nza/report", s.k4nzaReport)
 
 		// data export
 		export := api.Group("/export")

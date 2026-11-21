@@ -658,3 +658,104 @@ func TestCompass(t *testing.T) {
 		}
 	}
 }
+
+func TestK4nzaReport(t *testing.T) {
+	now := time.Now().UTC()
+	if now.Hour() == 0 && now.Minute() < 10 {
+		t.Skip("too close to midnight UTC")
+	}
+	pg := testPG(t)
+	ctx := context.Background()
+	if _, err := pg.db.Exec(ctx, `DELETE FROM interesting_aircraft_seen`); err != nil {
+		t.Fatal(err)
+	}
+	r := testRouter(pg)
+	recent := now.Add(-3 * time.Minute)
+	insertVisit(t, pg, testVisit{hex: "a00001", flight: "SWA1", t: "B738", first: now.Add(-40 * 24 * time.Hour), rDstNm: 40, rDir: 10})
+	insertVisit(t, pg, testVisit{hex: "a00001", flight: "SWA1", t: "B738", first: now.Add(-9 * 24 * time.Hour), rDstNm: 40, rDir: 10})
+	insertVisit(t, pg, testVisit{hex: "a00001", flight: "SWA1", t: "B738", first: recent, rDstNm: 120, rDir: 270})
+	insertVisit(t, pg, testVisit{hex: "a00002", flight: "SWA2", t: "B738", first: recent, rDstNm: 50, rDir: 90})
+	insertVisit(t, pg, testVisit{hex: "ae0001", flight: "RCH1", t: "C17", first: recent, rDstNm: 30, rDir: 180})
+	if _, err := pg.db.Exec(ctx, `
+		INSERT INTO route_data (route_callsign, airline_name, airline_icao, origin_iata_code, origin_name, destination_iata_code, destination_name)
+		VALUES ('SWA1', 'Southwest', 'SWA', 'MCI', 'Kansas City', 'DAL', 'Dallas'),
+		       ('SWA2', 'Southwest', 'SWA', 'MCI', 'Kansas City', 'DAL', 'Dallas');
+		INSERT INTO registration_data (mode_s, icao_type, manufacturer, type) VALUES ('a00001', 'B738', 'Boeing', '737-800');
+		INSERT INTO interesting_aircraft_seen (icao, "group", type, icao_type, operator, seen)
+		VALUES ('AE0001', 'Mil', 'Boeing C-17A Globemaster III', 'C17', 'USAF', $1)`, recent.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	type row struct {
+		Name    string `json:"name"`
+		Code    string `json:"code"`
+		From    string `json:"from"`
+		Flights int64  `json:"flights"`
+		N       int64  `json:"aircraft"`
+	}
+	var res struct {
+		Flights  int64        `json:"flights"`
+		Before   *int64       `json:"flights_before"`
+		Aircraft int64        `json:"aircraft"`
+		New      int64        `json:"new_aircraft"`
+		Types    int64        `json:"types"`
+		Military int64        `json:"military"`
+		MilTypes []string     `json:"military_types"`
+		Farthest homeAircraft `json:"farthest"`
+		Heat     [][]float64  `json:"heat"`
+		Airlines []row        `json:"airlines"`
+		AcTypes  []row        `json:"aircraft_types"`
+		Routes   []row        `json:"routes"`
+		Visitors []struct {
+			Hex    string `json:"hex"`
+			Group  string `json:"group"`
+			Replay string `json:"replay_utc"`
+		} `json:"visitors"`
+	}
+	if code := getJSON(t, r, "/api/k4nza/report?period=week", &res); code != 200 {
+		t.Fatalf("HTTP %d", code)
+	}
+	if res.Flights != 3 || res.Aircraft != 3 || res.New != 2 || res.Types != 2 {
+		t.Errorf("week: %d flights, %d aircraft, %d new, %d types; want 3, 3, 2, 2", res.Flights, res.Aircraft, res.New, res.Types)
+	}
+	if res.Before == nil || *res.Before != 1 {
+		t.Errorf("week before = %v, want 1 (the visit 9 days ago)", res.Before)
+	}
+	if res.Military != 1 || len(res.MilTypes) != 1 || res.MilTypes[0] != "C17" {
+		t.Errorf("military %d %v, want 1 [C17]", res.Military, res.MilTypes)
+	}
+	if res.Farthest.Hex != "a00001" || res.Farthest.Nm == nil || *res.Farthest.Nm != 120 || res.Farthest.Dir != "W" {
+		t.Errorf("farthest %+v", res.Farthest)
+	}
+	var cells float64
+	for _, d := range res.Heat {
+		for _, n := range d {
+			cells += n
+		}
+	}
+	if len(res.Heat) != 7 || len(res.Heat[0]) != 24 || cells != 3 {
+		t.Errorf("heat %dx? adding up to %v, want 7x24 and 3", len(res.Heat), cells)
+	}
+	if len(res.Airlines) != 1 || res.Airlines[0].Name != "Southwest" || res.Airlines[0].Flights != 2 {
+		t.Errorf("airlines %+v", res.Airlines)
+	}
+	if len(res.AcTypes) != 2 || res.AcTypes[0].Code != "B738" || res.AcTypes[0].N != 2 || res.AcTypes[0].Name != "Boeing 737-800" {
+		t.Errorf("types %+v", res.AcTypes)
+	}
+	if len(res.Routes) != 1 || res.Routes[0].From != "MCI" || res.Routes[0].Flights != 2 {
+		t.Errorf("routes %+v", res.Routes)
+	}
+	if len(res.Visitors) != 1 || res.Visitors[0].Hex != "ae0001" || res.Visitors[0].Group != "Mil" {
+		t.Errorf("visitors %+v", res.Visitors)
+	} else if v, err := time.Parse(time.RFC3339, res.Visitors[0].Replay); err != nil || v.Sub(recent).Abs() > time.Second {
+		t.Errorf("replay start %q, want the visit start %v", res.Visitors[0].Replay, recent)
+	}
+
+	// all time counts the old visits too; a bad period is refused
+	res.Before = nil
+	if code := getJSON(t, r, "/api/k4nza/report?period=all", &res); code != 200 || res.Flights != 5 || res.Before != nil {
+		t.Errorf("all: HTTP %d, %d flights (want 5), before %v", code, res.Flights, res.Before)
+	}
+	if code := getJSON(t, r, "/api/k4nza/report?period=year", nil); code != 400 {
+		t.Errorf("bad period: HTTP %d, want 400", code)
+	}
+}

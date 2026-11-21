@@ -38,6 +38,11 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	out := gin.H{}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.UTC
+	}
+	today, _ := reportPeriodFor("today", time.Now(), loc)
 
 	// aircraft per local hour today
 	hours := make([]int64, 24)
@@ -71,30 +76,8 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 	out["aircraft_today"] = today
 	out["new_today"] = fresh
 
-	// farthest today: first-heard distance, or the last position, whichever is farther
-	far := homeAircraft{}
-	var nm, dir float64
-	if err := s.pg.db.QueryRow(ctx, `
-		WITH a AS (
-			SELECT hex, COALESCE(TRIM(flight), '') AS cs, COALESCE(t, '') AS t,
-			       r_dst::float8 AS nm1, r_dir::float8 AS dir1,
-			       last_seen_distance::float8 / $4 AS nm2,
-			       CASE WHEN last_seen_lat IS NOT NULL AND last_seen_lon IS NOT NULL AND NOT (last_seen_lat = 0 AND last_seen_lon = 0)
-			            THEN atan2d(sind(last_seen_lon::float8 - $3) * cosd(last_seen_lat::float8),
-			                        cosd($2) * sind(last_seen_lat::float8) - sind($2) * cosd(last_seen_lat::float8) * cosd(last_seen_lon::float8 - $3))
-			       END AS dir2
-			FROM aircraft_data
-			WHERE first_seen >= DATE_TRUNC('day', NOW(), $1)
-		), p AS (
-			SELECT hex, cs, t, nm1 AS nm, dir1 AS dir FROM a WHERE nm1 > 0 AND dir1 IS NOT NULL
-			UNION ALL
-			SELECT hex, cs, t, nm2, dir2 FROM a WHERE nm2 > 0 AND dir2 IS NOT NULL
-		)
-		SELECT hex, cs, t, nm, dir FROM p WHERE nm < $5 ORDER BY nm DESC LIMIT 1`,
-		tz, getLat(), getLon(), kmPerNm, maxPlausibleNm()).Scan(&far.Hex, &far.Callsign, &far.Type, &nm, &dir); err == nil {
-		far.Nm = &nm
-		far.Dir = compass(dir)
-		s.homeDetails(ctx, &far)
+	// farthest today
+	if far, ok := s.farthestSince(ctx, today.start, tz); ok {
 		out["farthest"] = far
 	}
 
@@ -128,7 +111,7 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 		out["military"] = mil
 	}
 	var milCount int64
-	_ = s.pg.db.QueryRow(ctx, `SELECT COUNT(DISTINCT icao) FROM interesting_aircraft_seen WHERE "group" = 'Mil' AND seen >= DATE_TRUNC('day', NOW(), $1)`, tz).Scan(&milCount)
+	_ = s.pg.db.QueryRow(ctx, `SELECT COUNT(*) FROM (`+militaryHexSQL+`) m`, today.start).Scan(&milCount)
 	out["military_today"] = milCount
 
 	// rarest type today: of the types heard today, the one with the fewest different aircraft ever
