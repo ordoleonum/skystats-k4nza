@@ -154,6 +154,7 @@ func TestFeederMilitaryDetails(t *testing.T) {
 		"GULFSTREAM 5":        "Gulfstream 5",
 		"U S BANK NA TRUSTEE": "U S Bank NA Trustee",
 		"Cargojet Airways":    "Cargojet Airways",
+		"AIR WISCONSIN LLC":   "Air Wisconsin LLC",
 		"  ":                  "",
 	} {
 		if got := niceCase(in); got != want {

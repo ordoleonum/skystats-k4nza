@@ -28,8 +28,14 @@ func nullText(s string) sql.NullString {
 
 // niceCase turns the feeder database's ALL CAPS text ("UNITED STATES AIR
 // FORCE", "GULFSTREAM 5") into "United States Air Force", "Gulfstream 5".
-// Text with lower case letters is kept; so are short words (US, LLC, NA) and
-// words with digits (C-37A).
+// Text with lower case letters is kept; so are words of one or two letters
+// (US, NA), known abbreviations (LLC, USAF) and words with digits (C-37A).
+var keepCaps = map[string]bool{
+	"LLC": true, "USA": true, "USAF": true, "USN": true, "USMC": true, "USCG": true, "NASA": true,
+	"FAA": true, "UPS": true, "DHL": true, "PHI": true, "BAE": true, "ATR": true, "CRJ": true,
+	"ERJ": true, "MAX": true, "II": true, "III": true, "IV": true,
+}
+
 func niceCase(s string) string {
 	s = strings.Join(strings.Fields(s), " ")
 	if s == "" || strings.ToUpper(s) != s {
@@ -37,7 +43,7 @@ func niceCase(s string) string {
 	}
 	words := strings.Split(s, " ")
 	for i, w := range words {
-		if len(w) <= 3 || strings.ContainsAny(w, "0123456789") {
+		if len(w) <= 2 || keepCaps[w] || strings.ContainsAny(w, "0123456789") {
 			continue
 		}
 		words[i] = w[:1] + strings.ToLower(w[1:])
