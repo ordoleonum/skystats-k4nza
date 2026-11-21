@@ -302,6 +302,17 @@ func (s *APIServer) k4nzaReport(c *gin.Context) {
 				v := math.Round(*nm*10) / 10
 				nm = &v
 			}
+			// the type in words: a "model" that is only a code ("E6") or none at all
+			if name, ok := data.LookupTypeName(model); ok && !strings.Contains(model, " ") {
+				if t == "" {
+					t = strings.ToUpper(strings.TrimSpace(model))
+				}
+				model = name
+			} else if model == "" {
+				if name, ok := data.LookupTypeName(t); ok {
+					model = name
+				}
+			}
 			// the replay starts where the visit started
 			start := seen
 			if visitStart != nil {

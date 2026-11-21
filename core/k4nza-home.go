@@ -7,6 +7,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -200,6 +201,15 @@ func (s *APIServer) homeDaily(ctx context.Context, tz string, loc *time.Location
 // 737-800"), else the registration lookup (often a raw "737NG 823/W").
 func (s *APIServer) homeDetails(ctx context.Context, a *homeAircraft) {
 	defer func() {
+		// a "model" that is only a type code ("E6", from plane-alert-db or the
+		// feeder's database) becomes the type: "Boeing E-6 Mercury"
+		if name, ok := data.LookupTypeName(a.Model); ok && !strings.Contains(a.Model, " ") {
+			if a.Type == "" {
+				a.Type = strings.ToUpper(strings.TrimSpace(a.Model))
+			}
+			a.Model = name
+			return
+		}
 		if a.Model == "" || a.modelFromLookup {
 			if name, ok := data.LookupTypeName(a.Type); ok {
 				a.Model = name

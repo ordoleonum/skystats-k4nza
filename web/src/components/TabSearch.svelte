@@ -199,7 +199,8 @@
         const names = [];
         if (model) names.push(maker && !model.toLowerCase().includes(maker.toLowerCase().split(' ')[0]) ? `${maker} ${model}` : model);
         names.push(d.interesting?.type, d.type_name, d.type);
-        return wikiTypePhoto(names, d.type || model);
+        // the label names the type in words ("Typical Boeing 737-800"), not its code
+        return wikiTypePhoto(names, d.type_name || d.interesting?.type || model || d.type);
     }
 
     async function loadMoreVisits() {

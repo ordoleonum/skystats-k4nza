@@ -151,11 +151,15 @@ func TestFeederMilitaryDetails(t *testing.T) {
 		t.Errorf("empty details stored: %+v", ia)
 	}
 	for in, want := range map[string]string{
-		"GULFSTREAM 5":        "Gulfstream 5",
-		"U S BANK NA TRUSTEE": "U S Bank NA Trustee",
-		"Cargojet Airways":    "Cargojet Airways",
-		"AIR WISCONSIN LLC":   "Air Wisconsin LLC",
-		"  ":                  "",
+		"GULFSTREAM 5":                   "Gulfstream 5",
+		"U S BANK NA TRUSTEE":            "U S Bank NA Trustee",
+		"Cargojet Airways":               "Cargojet Airways",
+		"AIR WISCONSIN LLC":              "Air Wisconsin LLC",
+		"DEPARTMENT OF THE NAVY":         "Department of the Navy",
+		"MCDONNELL-DOUGLAS F/A-18":       "McDonnell-Douglas F/A-18",
+		"UNITED STATES AIR FORCE (USAF)": "United States Air Force (USAF)",
+		"THE BOEING COMPANY":             "The Boeing Company",
+		"  ":                             "",
 	} {
 		if got := niceCase(in); got != want {
 			t.Errorf("niceCase(%q) = %q, want %q", in, got, want)
@@ -169,6 +173,7 @@ func TestTypeNames(t *testing.T) {
 		"b38m": "Boeing 737 MAX 8",
 		"MD11": "McDonnell-Douglas MD-11",
 		"DH8D": "de Havilland DHC-8-400 Dash 8",
+		"E6":   "Boeing E-6 Mercury",
 	} {
 		if got, ok := data.LookupTypeName(code); !ok || got != want {
 			t.Errorf("LookupTypeName(%q) = %q, %v; want %q", code, got, ok, want)

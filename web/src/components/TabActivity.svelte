@@ -76,8 +76,8 @@
       photos[v.hex] = null;
       try {
         const res = await fetch(`https://api.planespotters.net/pub/photos/hex/${encodeURIComponent(v.hex)}`);
-        if (!res.ok) continue;
-        const j = await res.json();
+        // planespotters busy or refusing: fall through to the type photo
+        const j = res.ok ? await res.json() : {};
         const p = j.photos && j.photos[0];
         if (p && p.thumbnail_large) {
           photos[v.hex] = { src: p.thumbnail_large.src, link: p.link, by: p.photographer };
@@ -85,7 +85,7 @@
         }
       } catch (e) { /* no photo */ }
       if (!photos[v.hex]) {
-        const t = await wikiTypePhoto([v.model, v.type], v.type || v.model);
+        const t = await wikiTypePhoto([v.model, v.type], v.model || v.type);
         if (t) {
           photos[v.hex] = { src: t.src, link: t.link, by: 'Wikipedia', typical: t.typical };
           photos = photos;
@@ -302,7 +302,7 @@
     <section class="dl-card">
       <h2 class="dl-h2 rep-mb">Who flew over most</h2>
       {#if airlines.length}
-        <div class="rep-bars" role="list">
+        <div class="rep-bars rep-bars-names" role="list">
           {#each airlines as a}
             <div class="rep-bar-row" role="listitem" title="{a.name}: {num(a.flights)} flights">
               <span class="rep-bar-name">{a.name}</span>
@@ -414,6 +414,8 @@
   .rep-bar-track { height: 22px; border-radius: 6px; background: var(--dl-accent-soft); overflow: hidden; }
   .rep-bar { display: block; height: 100%; border-radius: 6px; background: var(--dl-accent); }
   .rep-bar-n { font-weight: 600; text-align: right; }
+  /* airline names are longer than type codes: give them more of the row */
+  .rep-bars-names .rep-bar-row { grid-template-columns: minmax(112px, 42%) minmax(0, 1fr) 56px; }
   .rep-type { display: block; font-weight: 600; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
   .rep-type:hover { color: var(--dl-accent); }
   .rep-type-name { display: block; font-size: 12px; font-weight: 500; color: var(--dl-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

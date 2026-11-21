@@ -36,6 +36,11 @@ var keepCaps = map[string]bool{
 	"ERJ": true, "MAX": true, "II": true, "III": true, "IV": true,
 }
 
+// small joining words, written in lower case inside a name ("Department of the Navy")
+var smallWords = map[string]bool{
+	"OF": true, "THE": true, "AND": true, "FOR": true, "AT": true, "BY": true, "IN": true, "ON": true, "TO": true, "DE": true,
+}
+
 func niceCase(s string) string {
 	s = strings.Join(strings.Fields(s), " ")
 	if s == "" || strings.ToUpper(s) != s {
@@ -43,12 +48,34 @@ func niceCase(s string) string {
 	}
 	words := strings.Split(s, " ")
 	for i, w := range words {
-		if len(w) <= 2 || keepCaps[w] || strings.ContainsAny(w, "0123456789") {
+		if i > 0 && smallWords[w] {
+			words[i] = strings.ToLower(w)
 			continue
 		}
-		words[i] = w[:1] + strings.ToLower(w[1:])
+		// each part of "MCDONNELL-DOUGLAS" on its own
+		parts := strings.Split(w, "-")
+		for j, part := range parts {
+			parts[j] = nicePart(part)
+		}
+		words[i] = strings.Join(parts, "-")
 	}
 	return strings.Join(words, " ")
+}
+
+// nicePart: one word, with any brackets or punctuation around it left alone
+func nicePart(w string) string {
+	core := strings.TrimFunc(w, func(r rune) bool { return !(r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') })
+	if core == "" {
+		return w
+	}
+	if len(core) <= 2 || keepCaps[core] || strings.ContainsAny(core, "0123456789/.&'") {
+		return w
+	}
+	nice := core[:1] + strings.ToLower(core[1:])
+	if strings.HasPrefix(core, "MC") && len(core) > 3 {
+		nice = "Mc" + core[2:3] + strings.ToLower(core[3:]) // MCDONNELL -> McDonnell
+	}
+	return strings.Replace(w, core, nice, 1)
 }
 
 // copyLiveFields fills in what was seen live (position, callsign, time).

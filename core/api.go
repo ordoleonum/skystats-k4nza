@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tomcarman/skystats/data"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 )
@@ -494,6 +495,14 @@ func (s *APIServer) getRecentInterestingAircraft(c *gin.Context, group string) {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+
+		// K4NZA: no type in words (aircraft tagged from the feeder's database
+		// before it stored one): name the ICAO type code ("H60" -> "Sikorsky ...")
+		if aircraftType == "" {
+			if name, ok := data.LookupTypeName(icaoType); ok {
+				aircraftType = name
+			}
 		}
 
 		aircraft = append(aircraft, gin.H{
