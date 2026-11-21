@@ -60,7 +60,8 @@
       document.getElementById("settings-modal").showModal();
   }
 
-  $: tagline = 'k4nza-build' + ($feederInfo.feeder_version ? ' · ' + $feederInfo.feeder_version : '');
+  // just the build name, as in the feeder's top bar (the version is in the footer)
+  const tagline = 'k4nza-build';
 </script>
 
 <header class="dl-header">
