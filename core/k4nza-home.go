@@ -42,7 +42,7 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 	if err != nil {
 		loc = time.UTC
 	}
-	today, _ := reportPeriodFor("today", time.Now(), loc)
+	day, _ := reportPeriodFor("today", time.Now(), loc)
 
 	// aircraft per local hour today
 	hours := make([]int64, 24)
@@ -77,7 +77,7 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 	out["new_today"] = fresh
 
 	// farthest today
-	if far, ok := s.farthestSince(ctx, today.start, tz); ok {
+	if far, ok := s.farthestSince(ctx, day.start, tz); ok {
 		out["farthest"] = far
 	}
 
@@ -111,7 +111,7 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 		out["military"] = mil
 	}
 	var milCount int64
-	_ = s.pg.db.QueryRow(ctx, `SELECT COUNT(*) FROM (`+militaryHexSQL+`) m`, today.start).Scan(&milCount)
+	_ = s.pg.db.QueryRow(ctx, `SELECT COUNT(*) FROM (`+militaryHexSQL+`) m`, day.start).Scan(&milCount)
 	out["military_today"] = milCount
 
 	// rarest type today: of the types heard today, the one with the fewest different aircraft ever

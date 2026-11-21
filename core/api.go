@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -1488,7 +1489,13 @@ func (s *APIServer) getConfig(c *gin.Context) {
 	default:
 		units = "nautical"
 	}
-	c.JSON(http.StatusOK, gin.H{"default_units": units})
+	// K4NZA: the page header shows the station name and the feeder build
+	version := strings.TrimSpace(strings.ReplaceAll(os.Getenv("FEEDER_VERSION"), "(k4nza)", ""))
+	c.JSON(http.StatusOK, gin.H{
+		"default_units":  units,
+		"station_name":   strings.TrimSpace(os.Getenv("STATION_NAME")),
+		"feeder_version": version,
+	})
 }
 
 func (s *APIServer) getLimit(settingKey ...string) int {
