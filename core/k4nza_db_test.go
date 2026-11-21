@@ -621,9 +621,10 @@ func TestK4nzaHomeSummary(t *testing.T) {
 		Today    int64   `json:"aircraft_today"`
 		New      int64   `json:"new_today"`
 		Farthest struct {
-			Hex string  `json:"hex"`
-			Nm  float64 `json:"distance_nm"`
-			Dir string  `json:"direction"`
+			Hex   string  `json:"hex"`
+			Nm    float64 `json:"distance_nm"`
+			Dir   string  `json:"direction"`
+			Model string  `json:"model"`
 		} `json:"farthest"`
 		Rarest struct {
 			Type  string `json:"type"`
@@ -646,8 +647,43 @@ func TestK4nzaHomeSummary(t *testing.T) {
 	if res.Farthest.Hex != "a00001" || res.Farthest.Nm != 200 || res.Farthest.Dir != "WNW" {
 		t.Errorf("farthest %+v, want a00001 200 nm WNW", res.Farthest)
 	}
+	if res.Farthest.Model != "Boeing 737-800" {
+		t.Errorf("farthest model %q, want the ICAO type name Boeing 737-800", res.Farthest.Model)
+	}
 	if res.Rarest.Type != "H27J" || res.Rarest.Count != 1 {
 		t.Errorf("rarest %+v, want H27J seen once", res.Rarest)
+	}
+}
+
+func TestK4nzaHomeDaily(t *testing.T) {
+	now := time.Now().UTC()
+	if now.Hour() == 0 && now.Minute() < 10 {
+		t.Skip("too close to midnight UTC")
+	}
+	pg := testPG(t)
+	r := testRouter(pg)
+	recent := now.Add(-3 * time.Minute)
+	insertVisit(t, pg, testVisit{hex: "a00001", t: "B738", first: now.Add(-48 * time.Hour), rDstNm: 40, rDir: 10})
+	insertVisit(t, pg, testVisit{hex: "a00001", t: "B738", first: recent, rDstNm: 40, rDir: 10})
+	insertVisit(t, pg, testVisit{hex: "a00002", t: "B738", first: recent, rDstNm: 50, rDir: 90})
+	insertVisit(t, pg, testVisit{hex: "a00003", t: "B738", first: now.Add(-40 * 24 * time.Hour), rDstNm: 50, rDir: 90})
+	var res struct {
+		Daily []struct {
+			Date     string `json:"date"`
+			Aircraft int64  `json:"aircraft"`
+		} `json:"daily"`
+	}
+	if code := getJSON(t, r, "/api/k4nza/home?tz=UTC&days=7", &res); code != 200 {
+		t.Fatalf("HTTP %d", code)
+	}
+	if len(res.Daily) != 7 || res.Daily[6].Date != now.Format("2006-01-02") || res.Daily[6].Aircraft != 2 {
+		t.Fatalf("daily %+v, want 7 days ending today with 2 aircraft", res.Daily)
+	}
+	if res.Daily[4].Aircraft != 1 {
+		t.Errorf("two days ago: %d aircraft, want 1", res.Daily[4].Aircraft)
+	}
+	if code := getJSON(t, r, "/api/k4nza/home?tz=UTC&days=30", &res); code != 200 || len(res.Daily) != 30 {
+		t.Errorf("30 days: HTTP %d, %d days", code, len(res.Daily))
 	}
 }
 

@@ -212,7 +212,8 @@
                 const res = await fetch(url);
                 if (!res.ok) return null;
                 const pages = Object.values((await res.json()).query?.pages || {}).sort((a, b) => a.index - b.index);
-                const page = pages.find((p) => p.thumbnail?.source && WIKI_AIRCRAFT.test(p.description || '') &&
+                // photos only (JPEG): drawings and silhouettes are PNG or SVG
+                const page = pages.find((p) => /\.jpe?g/i.test(p.thumbnail?.source || '') && WIKI_AIRCRAFT.test(p.description || '') &&
                     !WIKI_NOT.test(`${p.description || ''} ${p.title}`));
                 if (page) {
                     return {

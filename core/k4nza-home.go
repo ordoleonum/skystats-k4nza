@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tomcarman/skystats/data"
 )
 
 type homeAircraft struct {
@@ -24,6 +25,9 @@ type homeAircraft struct {
 	Dir      string   `json:"direction,omitempty"`
 	When     *string  `json:"when,omitempty"`
 	Count    *int64   `json:"times_ever,omitempty"`
+
+	// the model is the registration lookup's (often a raw model string)
+	modelFromLookup bool
 }
 
 // compass turns a bearing into one of 16 points ("WNW").
@@ -43,6 +47,22 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 		loc = time.UTC
 	}
 	day, _ := reportPeriodFor("today", time.Now(), loc)
+
+	// the hour-by-hour card's Week / Month views: different aircraft per local
+	// day for the last 7 or 30 days (today included), and nothing else
+	if d := c.Query("days"); d == "7" || d == "30" {
+		n := 7
+		if d == "30" {
+			n = 30
+		}
+		daily, err := s.homeDaily(ctx, tz, loc, n)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"daily": daily})
+		return
+	}
 
 	// aircraft per local hour today
 	hours := make([]int64, 24)
@@ -135,9 +155,57 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
+type homeDay struct {
+	Date     string `json:"date"` // YYYY-MM-DD, station time
+	Aircraft int64  `json:"aircraft"`
+}
+
+// homeDaily: different aircraft heard on each of the last n local days,
+// oldest first, today last (days without any are 0).
+func (s *APIServer) homeDaily(ctx context.Context, tz string, loc *time.Location, n int) ([]homeDay, error) {
+	rows, err := s.pg.db.Query(ctx, `
+		SELECT TO_CHAR(first_seen AT TIME ZONE $1, 'YYYY-MM-DD'), COUNT(DISTINCT hex)
+		FROM aircraft_data
+		WHERE first_seen >= DATE_TRUNC('day', NOW(), $1) - make_interval(days => $2)
+		GROUP BY 1`, tz, n-1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := map[string]int64{}
+	for rows.Next() {
+		var d string
+		var c int64
+		if err := rows.Scan(&d, &c); err != nil {
+			return nil, err
+		}
+		counts[d] = c
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	now := time.Now().In(loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, loc)
+	out := make([]homeDay, 0, n)
+	for i := n - 1; i >= 0; i-- {
+		d := today.AddDate(0, 0, -i).Format("2006-01-02")
+		out = append(out, homeDay{Date: d, Aircraft: counts[d]})
+	}
+	return out, nil
+}
+
 // homeDetails fills registration, model and operator from the registration
-// lookup and plane-alert-db, where known.
+// lookup and plane-alert-db, where known. The model in words comes from
+// plane-alert-db ("Boeing E-6B Mercury"), else the ICAO type list ("Boeing
+// 737-800"), else the registration lookup (often a raw "737NG 823/W").
 func (s *APIServer) homeDetails(ctx context.Context, a *homeAircraft) {
+	defer func() {
+		if a.Model == "" || a.modelFromLookup {
+			if name, ok := data.LookupTypeName(a.Type); ok {
+				a.Model = name
+			}
+		}
+	}()
 	var reg, maker, model, owner, icaoType string
 	if err := s.pg.db.QueryRow(ctx, `
 		SELECT COALESCE(registration, ''), COALESCE(manufacturer, ''), COALESCE(type, ''), COALESCE(registered_owner, ''), COALESCE(icao_type, '')
@@ -150,6 +218,7 @@ func (s *APIServer) homeDetails(ctx context.Context, a *homeAircraft) {
 			if maker != "" {
 				a.Model = maker + " " + model
 			}
+			a.modelFromLookup = true
 		}
 		if a.Operator == "" {
 			a.Operator = owner
@@ -164,8 +233,9 @@ func (s *APIServer) homeDetails(ctx context.Context, a *homeAircraft) {
 		if op != "" {
 			a.Operator = op
 		}
-		if a.Model == "" {
+		if paType != "" && (a.Model == "" || a.modelFromLookup) {
 			a.Model = paType
+			a.modelFromLookup = false
 		}
 	}
 }
