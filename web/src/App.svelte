@@ -60,8 +60,9 @@
       document.getElementById("settings-modal").showModal();
   }
 
-  // just the build name, as in the feeder's top bar (the version is in the footer)
-  const tagline = 'k4nza-build';
+  // "k4nza build -34", as in the feeder's top bar: the K4NZA release number only
+  $: release = ($feederInfo.feeder_version.match(/-(\d+)\s*$/) || [])[1];
+  $: tagline = 'k4nza build' + (release ? ' -' + release : '');
 </script>
 
 <header class="dl-header">
