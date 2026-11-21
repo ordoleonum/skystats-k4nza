@@ -23,7 +23,11 @@
         { key: 'month', label: 'Month' },
         { key: 'all', label: 'All' }
     ];
-    let selected = 'day';
+    // the period comes from the Activity tab's switch
+    export let period = 'day';
+    export let note = '';
+    let selected = period;
+    $: if (period !== selected) { selected = period; load(); }
 
     let canvas = null;
     let chart = null;
@@ -167,17 +171,12 @@
     });
 </script>
 
-<div class="bg-base-100 rounded-box shadow-md pt-6 p-8">
-    <div class="flex justify-between items-center mb-2 gap-2 flex-wrap">
-        <h2 class="text-2xl font-extralight tracking-wider">Range by Direction</h2>
-        <div class="tabs tabs-box flex-nowrap">
-            {#each periods as p}
-                <input type="radio" name="activity_tabs_range" class="tab" aria-label={p.label}
-                    checked={selected === p.key} on:change={() => pick(p.key)} />
-            {/each}
-        </div>
+<section class="dl-card rc">
+    <div class="dl-card-head">
+        <h2 class="dl-h2">How far you can hear</h2>
+        <span class="dl-note">Range by direction</span>
     </div>
-    <div class="flex gap-4 text-xs opacity-70 mb-2 flex-wrap">
+    <div class="flex gap-4 dl-note flex-wrap">
         <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-primary"></span>
             Farthest heard{#if data && data.max_nm}{' '}(max {round(fromNm(data.max_nm, $units), 1)} {distanceLabel[$units]}){/if}</span>
         {#if selected !== 'all'}
@@ -198,10 +197,10 @@
             <canvas bind:this={canvas}></canvas>
         </div>
     {/if}
-    <p class="text-xs opacity-60 mt-3">
+    <p class="dl-note">
         A dent in the shape means something is blocking the antenna in that direction.
     </p>
-    <details class="text-sm mt-2">
+    <details class="text-sm">
         <summary class="cursor-pointer opacity-80">How to read this chart</summary>
         <ul class="list-disc ml-5 mt-2 space-y-1 opacity-80">
             <li><b>The shape:</b> the farthest aircraft heard in each direction, with your station in the middle. Bigger means more range.</li>
@@ -212,4 +211,9 @@
             <li><b>Lopsided towards busy airways:</b> normal; directions with few flights fill in more slowly. Month and All smooth it out.</li>
         </ul>
     </details>
-</div>
+</section>
+
+<style>
+    .rc { display: flex; flex-direction: column; gap: 10px; }
+    .rc :global(.h-100) { height: 340px; }
+</style>

@@ -5,6 +5,7 @@
     import { IconSearch, IconDownload, IconExternalLink, IconX, IconInfoCircle, IconPlane, IconHelicopter } from '@tabler/icons-svelte';
     import { units } from '../stores/units';
     import { formatDistanceKm, formatAltitude } from '../lib/units';
+    import { replayUrl } from '../lib/feeder.js';
 
     let query = '';
     let days = '0';
@@ -511,7 +512,12 @@
                     <tbody>
                         {#each detail.visits_list as v}
                             <tr>
-                                <td class="whitespace-nowrap">{fmtWhen(v.first_seen, v.last_seen)}</td>
+                                <td class="whitespace-nowrap">
+                                    {#if replayUrl(detail.hex, v.first_seen)}
+                                        <a class="link link-primary" href={replayUrl(detail.hex, v.first_seen)} target="_blank" rel="noopener"
+                                            title="Replay this visit on the live map">{fmtWhen(v.first_seen, v.last_seen)}</a>
+                                    {:else}{fmtWhen(v.first_seen, v.last_seen)}{/if}
+                                </td>
                                 <td class="font-mono">{v.callsign || '–'}</td>
                                 <td class="whitespace-nowrap" title={v.origin_name && v.destination_name ? `${v.origin_name} to ${v.destination_name}` : ''}>{route(v)}</td>
                                 <td class="whitespace-nowrap">{dist(v.closest_km, $units)}</td>
@@ -529,7 +535,7 @@
                 <a class="link link-primary inline-flex items-center gap-1" href="api/search/aircraft/{detail.hex}/visits.csv" download>
                     <IconDownload class="w-4 h-4" /> Download these visits (CSV)
                 </a>
-                <span class="text-base-content/50">Times are in {tz}.</span>
+                <span class="text-base-content/50">Times are in {tz}. Click one to replay that visit on the live map.</span>
             </div>
         </div>
     </div>

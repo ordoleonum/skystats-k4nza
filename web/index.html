@@ -5,9 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SkyStats-K4NZA</title>
+    <script>
+      // start in the right look before the page draws (no white flash in dark mode)
+      (function () {
+        var t = null, q = new URLSearchParams(location.search).get('k4theme');
+        if (q === 'light' || q === 'dark') t = q === 'dark' ? 'daylight-dark' : 'daylight';
+        if (!t) { try { t = localStorage.getItem('theme'); } catch (e) {} }
+        t = { nord: 'daylight', night: 'daylight-dark' }[t] || t;
+        if (t !== 'daylight' && t !== 'daylight-dark')
+          t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'daylight-dark' : 'daylight';
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
   </head>
   <body>
-    <div id="app" class="bg-base-200"></div>
+    <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

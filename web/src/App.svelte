@@ -1,7 +1,6 @@
 <script>
   import { IconSettings, IconDownload, IconSearch } from '@tabler/icons-svelte';
   import ThemeSelector from './components/ThemeSelector.svelte';
-  import AboveTimeline from './components/AboveTimeline.svelte';
   import TabRouteStats from './components/TabRouteStats.svelte';
   import TabMotionStats from './components/TabMotionStats.svelte';
   import TabInterestingStats from './components/TabInterestingStats.svelte';
@@ -9,32 +8,27 @@
   import TabSearch from './components/TabSearch.svelte';
   import Footer from './components/Footer.svelte';
   import Settings from './components/Settings.svelte';
+  import { feederBase, backToFeeder, feederInfo } from './lib/feeder.js';
 
-  // ?q=... (e.g. from the feeder home page) opens the Search tab
-  // ?q=... (a search) or ?group=Mil|Gov|Pol|Civ (a whole interesting group) opens the Search tab
+  // ?q=... (a search, e.g. from the feeder home page) or ?group=Mil|Gov|Pol|Civ
+  // (a whole interesting group) opens the Search tab
   const startParams = new URLSearchParams(window.location.search);
   let activeTab = startParams.get('q') || startParams.get('group') ? 'search' : 'activity';
-  let tabsElement;
 
   const tabs = [
     { name: 'activity', label: 'Activity', component: TabActivity },
-    { name: 'route-stat', label: 'Route Information', component: TabRouteStats },
-    { name: 'interesting-stat', label: 'Interesting Aircraft', component: TabInterestingStats },
-    { name: 'motion-stat', label: 'Record Holders', component: TabMotionStats },
+    { name: 'route-stat', label: 'Routes', component: TabRouteStats },
+    { name: 'interesting-stat', label: 'Interesting', component: TabInterestingStats },
+    { name: 'motion-stat', label: 'Records', component: TabMotionStats },
     { name: 'search', label: 'Search', component: TabSearch }
   ];
 
   function setActiveTab(tabName) {
     activeTab = tabName;
-    if (tabsElement) {
-      const yOffset = -60;
-      const y = tabsElement.getBoundingClientRect().top + window.pageYOffset + yOffset;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }
+    window.scrollTo({ top: 0 });
   }
 
-  // the SkyStats-K4NZA title: back to the dashboard (first tab, top of the page,
-  // no ?q= / ?group= left in the address)
+  // the SkyStats title: back to the first tab, top of the page, no ?q= / ?group= left
   function goHome() {
       activeTab = 'activity';
       try {
@@ -57,6 +51,8 @@
 
   // a registration clicked in another tab (lib/search.js); TabSearch runs the search
   window.addEventListener('skystats-search-for', () => setActiveTab('search'));
+  // "All interesting aircraft" on the Activity tab
+  window.addEventListener('skystats-open-tab', (e) => setActiveTab(e.detail));
 
   // one-click access to data export
   function openExport() {
@@ -64,100 +60,97 @@
       document.getElementById("settings-modal").showModal();
   }
 
+  $: tagline = 'k4nza-build' + ($feederInfo.feeder_version ? ' · ' + $feederInfo.feeder_version : '');
 </script>
 
-
-<div class="navbar bg-base-100 shadow-sm">
-  <div class="navbar-start hidden md:flex">
-    <!-- <div class="dropdown">
-      <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" /> </svg>
-      </div>
-      <ul
-        tabindex="0"
-        class="menu menu-sm dropdown-content bg-base-100 rounded-box z-1 mt-3 w-52 p-2 shadow">
-        <li><a>Menu 1</a></li>
-        <li><a>Menu 2</a></li>
-      </ul>
-    </div> -->
-  </div>
-  <div class="navbar-center">
-    <h1 class="text-2xl md:text-3xl lg:text-4xl font-normal text-primary drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] leading-none text-center">
-      <a href="./" class="cursor-pointer" title="Back to the dashboard" on:click|preventDefault={goHome}>SkyStats<span class="hidden md:inline">-K4NZA</span><span class="block md:hidden text-xs tracking-[0.3em]">K4NZA</span></a>
-    </h1>
-  </div>
-  <div class="navbar-end flex-1 md:flex-none">
-    <div class="mr-1 md:mr-4">
-      <ThemeSelector/>
+<header class="dl-header">
+  <div class="dl-header-in">
+    <div class="dl-brand">
+      <a class="dl-btn dl-back" href={feederBase()} on:click={backToFeeder} title="Back to the feeder" aria-label="Back to the feeder">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg><span>Feeder</span>
+      </a>
+      <a class="dl-title" href="./" title="Back to the first tab" on:click|preventDefault={goHome}>
+        <span class="dl-title-main">SkyStats{#if $feederInfo.station_name}{' '}<span class="dl-station">{$feederInfo.station_name}</span>{/if}</span>
+        <span class="dl-tagline dl-mono">{tagline}</span>
+      </a>
     </div>
-    <div class="tooltip tooltip-bottom" data-tip="Search for an aircraft">
-      <button class="btn btn-ghost btn-sm gap-1 mr-1" on:click={openSearch} aria-label="Search">
-          <IconSearch class="h-5 w-5" /><span class="hidden sm:inline">Search</span>
-      </button>
-    </div>
-    <div class="tooltip tooltip-left" data-tip="Download your recorded data (CSV / ZIP)">
-      <button class="btn btn-ghost btn-sm gap-1 mr-1" on:click={openExport} aria-label="Export data">
-          <IconDownload class="h-5 w-5" /><span class="hidden sm:inline">Export</span>
-      </button>
-    </div>
-    <div class="tooltip tooltip-left" data-tip="Display settings and about">
-      <button
-          class="btn btn-ghost btn-circle"
-          on:click={() => openSettingsModal()}
-          aria-label="Settings"
-      >
+    <div class="dl-header-tools">
+      <nav aria-label="SkyStats sections" class="dl-nav">
+        {#each tabs as tab}
+          <button type="button" class="dl-tab" aria-current={activeTab === tab.name ? 'page' : undefined}
+            on:click={() => tab.name === 'search' ? openSearch() : setActiveTab(tab.name)}>
+            {#if tab.name === 'search'}<IconSearch class="h-4 w-4" />{/if}{tab.label}
+          </button>
+        {/each}
+      </nav>
+      <div class="dl-header-btns">
+        <button type="button" class="dl-btn dl-icon-btn" on:click={openExport} aria-label="Export data" title="Download your recorded data (CSV / ZIP)">
+          <IconDownload class="h-5 w-5" />
+        </button>
+        <button type="button" class="dl-btn dl-icon-btn" on:click={openSettingsModal} aria-label="Settings" title="Display settings and about">
           <IconSettings class="h-5 w-5" />
-      </button>
+        </button>
+        <ThemeSelector/>
+      </div>
     </div>
-    <!-- <button class="btn btn-ghost btn-circle">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /> </svg>
-    </button>
-    <button class="btn btn-ghost btn-circle">
-      <div class="indicator">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /> </svg>
-        <span class="badge badge-xs badge-primary indicator-item"></span>
-      </div>
-    </button> -->
   </div>
-</div>
+</header>
 
-<div class="container max-w-8xl mx-auto px-2 py-8 sm:p-8">
-  <div class="grid grid-cols-1 mt-10 mb-15">
-    <AboveTimeline />
-  </div>
-
-  <!-- tabs -->
-  <div bind:this={tabsElement} class="tabs mb-6 flex justify-center">
-    {#each tabs as tab}
-      <button class="mr-4
-                    { activeTab === tab.name ?
-                      'badge badge-lg badge-primary tab-active text-white' :
-                      'badge badge-lg badge-primary badge-outline'
-                    }"
-      on:click={() => setActiveTab(tab.name)}>
-      {#if tab.name === 'search'}<IconSearch class="h-4 w-4 mr-1" />{/if}{tab.label}
-      </button>
-    {/each}
-  </div>
-
-  <!-- tab content -->
-  <div style="min-height: 1000px;">
-    {#each tabs as tab}
-      <div class="{activeTab === tab.name ? 'block fade-in' : 'hidden'}">
-        <svelte:component this={tab.component} />
-      </div>
-    {/each}
-  </div>
+<main class="dl-main">
+  {#each tabs as tab}
+    <div class="{activeTab === tab.name ? 'block fade-in' : 'hidden'}">
+      <svelte:component this={tab.component} active={activeTab === tab.name} />
+    </div>
+  {/each}
 
   <Footer />
-</div>
+</main>
 
 <Settings />
 
 <style>
+  .dl-header { background: var(--dl-surface); border-bottom: 1px solid var(--dl-line); }
+  .dl-header-in {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 10px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .dl-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .dl-back { flex: none; padding: 0 14px 0 10px; }
+  .dl-title { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; color: var(--dl-ink); text-decoration: none; }
+  .dl-title-main { font-weight: 800; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dl-station { font-weight: 600; font-size: 13px; color: var(--dl-muted); }
+  .dl-tagline { font-size: 11px; font-weight: 500; color: var(--dl-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dl-header-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .dl-nav { display: flex; flex-wrap: wrap; gap: 2px; }
+  .dl-header-btns { display: flex; gap: 6px; }
+  .dl-main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 36px 24px 40px;
+  }
+
+  /* phones: the sections scroll sideways under the title */
+  @media (max-width: 760px) {
+    .dl-header-in { padding: 10px 16px; }
+    .dl-header-tools { display: contents; }
+    .dl-brand { flex: 1 1 0; }
+    .dl-nav { order: 3; width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+    .dl-nav::-webkit-scrollbar { display: none; }
+    .dl-main { padding: 24px 16px 32px; }
+  }
+  @media (max-width: 420px) {
+    .dl-back span { display: none; }
+    .dl-back { width: 44px; padding: 0; }
+  }
 
   .fade-in {
-    animation: fadeIn 0.5s ease-in;
+    animation: fadeIn 0.3s ease-in;
   }
 
   @keyframes fadeIn {

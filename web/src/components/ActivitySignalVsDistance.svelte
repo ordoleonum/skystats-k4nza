@@ -27,7 +27,11 @@
         { key: 'week', label: 'Week' },
         { key: 'month', label: 'Month' }
     ];
-    let selected = 'day';
+    // the period comes from the Activity tab's switch
+    export let period = 'day';
+    export let note = '';
+    let selected = period;
+    $: if (period !== selected) { selected = period; load(); }
 
     let canvas = null;
     let chart = null;
@@ -183,17 +187,12 @@
     });
 </script>
 
-<div class="bg-base-100 rounded-box shadow-md pt-6 p-8">
-    <div class="flex justify-between items-center mb-2 gap-2 flex-wrap">
-        <h2 class="text-2xl font-extralight tracking-wider">Signal vs Distance</h2>
-        <div class="tabs tabs-box flex-nowrap">
-            {#each periods as p}
-                <input type="radio" name="activity_tabs_signal" class="tab" aria-label={p.label}
-                    checked={selected === p.key} on:change={() => pick(p.key)} />
-            {/each}
-        </div>
+<section class="dl-card rc">
+    <div class="dl-card-head">
+        <h2 class="dl-h2">Signal vs distance</h2>
+        <span class="dl-note">{note ? note + ' · ' : ''}{data?.points ? data.points.length.toLocaleString() + (data.mode === 'first_heard' ? ' aircraft' : ' closest passes') : ''}</span>
     </div>
-    <div class="flex gap-4 text-xs opacity-70 mb-2 flex-wrap">
+    <div class="flex gap-4 dl-note flex-wrap">
         <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-primary"></span>{data?.mode === 'first_heard' ? 'One aircraft (when first heard)' : 'One aircraft (at its closest)'}</span>
         <span class="flex items-center gap-1"><span class="inline-block w-4 border-t-2 border-base-content"></span>Median</span>
         <span class="flex items-center gap-1"><span class="inline-block w-4 border-t-2 border-dashed border-warning"></span>Overload ({OVERLOAD_DB} dB)</span>
@@ -220,12 +219,12 @@
             {#if data.closest_needed}Closest-approach readings so far: {data.closest_count} of {data.closest_needed}.{/if}</span>
         </div>
     {:else}
-        <p class="text-xs opacity-60 mt-3">
+        <p class="dl-note">
             Each dot is the signal when the aircraft was closest. A healthy band slopes down. Dots piled at the
             dashed line mean the gain is too high.
         </p>
     {/if}
-    <details class="text-sm mt-2">
+    <details class="text-sm">
         <summary class="cursor-pointer opacity-80">How to read this chart</summary>
         <ul class="list-disc ml-5 mt-2 space-y-1 opacity-80">
             <li><b>Healthy:</b> a thick band running from the top left (close and strong) down to the bottom right (far and weak), with a smooth median line through it. Each dot is an aircraft's signal at its closest to you.</li>
@@ -240,4 +239,9 @@
             <li><b>Weak dots close in:</b> usually low aircraft partly hidden from the antenna, or weak transponders. A few are normal.</li>
         </ul>
     </details>
-</div>
+</section>
+
+<style>
+    .rc { display: flex; flex-direction: column; gap: 10px; }
+    .rc :global(.h-100) { height: 340px; }
+</style>
