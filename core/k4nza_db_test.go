@@ -680,7 +680,10 @@ func TestK4nzaReport(t *testing.T) {
 		INSERT INTO route_data (route_callsign, airline_name, airline_icao, origin_iata_code, origin_name, destination_iata_code, destination_name)
 		VALUES ('SWA1', 'Southwest', 'SWA', 'MCI', 'Kansas City', 'DAL', 'Dallas'),
 		       ('SWA2', 'Southwest', 'SWA', 'MCI', 'Kansas City', 'DAL', 'Dallas');
-		INSERT INTO registration_data (mode_s, icao_type, manufacturer, type) VALUES ('a00001', 'B738', 'Boeing', '737-800');
+		INSERT INTO registration_data (mode_s, icao_type, manufacturer, type) VALUES ('a00001', 'B738', 'Boeing', '737-800')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pg.db.Exec(ctx, `
 		INSERT INTO interesting_aircraft_seen (icao, "group", type, icao_type, operator, seen)
 		VALUES ('AE0001', 'Mil', 'Boeing C-17A Globemaster III', 'C17', 'USAF', $1)`, recent.Add(time.Minute)); err != nil {
 		t.Fatal(err)
