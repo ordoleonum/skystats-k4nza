@@ -218,6 +218,7 @@ func TestSearch(t *testing.T) {
 	insertVisit(t, pg, testVisit{hex: "a1b2c3", flight: "DAL1423", r: "N812DN", t: "B739", first: daysAgo(20), lastKm: 30, minKm: &ten})
 	insertVisit(t, pg, testVisit{hex: "a1b2c3", flight: "DAL2210", r: "N812DN", t: "B739", first: time.Now().Add(-time.Hour), lastKm: 40, minKm: &five})
 	insertVisit(t, pg, testVisit{hex: "ae1234", flight: "RCH123", r: "07-7178", t: "C17", first: daysAgo(3), lastKm: 80})
+	insertVisit(t, pg, testVisit{hex: "ae5678", flight: "QUID55", r: "58-0100", t: "K35R", first: daysAgo(2), lastKm: 60})
 	if _, err := pg.db.Exec(ctx, `
 		INSERT INTO registration_data (mode_s, registration, registered_owner, manufacturer, type)
 		VALUES ('a1b2c3', 'N812DN', 'Delta Air Lines', 'Boeing', '737-932ER');
@@ -234,6 +235,9 @@ func TestSearch(t *testing.T) {
 	for q, want := range map[string]string{
 		"n-812dn": "a1b2c3", "A1B2C3": "a1b2c3", "dal14": "a1b2c3", "delta": "a1b2c3",
 		"c17": "ae1234", "air force": "ae1234", "07-71": "ae1234", "RCH": "ae1234",
+		// types by name, part of a name or the start of a code, not only the exact code
+		"kc-135r": "ae5678", "KC135": "ae5678", "stratotanker": "ae5678", "k35": "ae5678", "K35R": "ae5678",
+		"737": "a1b2c3", "globemaster": "ae1234",
 	} {
 		var res result
 		if code := getJSON(t, r, "/api/search?q="+strings.ReplaceAll(q, " ", "+"), &res); code != 200 {

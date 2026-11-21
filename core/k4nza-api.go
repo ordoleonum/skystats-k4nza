@@ -156,7 +156,9 @@ const regKeyRegistration = `regexp_replace(upper(registration), '[^A-Z0-9]', '',
 // searchSQL finds the matching aircraft first (cheap, mostly by index) and
 // only then adds up their visits. $1 watermark, $2 key (letters/digits),
 // $3 hex (” = not a hex code), $4 operator pattern (” = don't search
-// operators), $5 days (0 = all time), $6 max rows.
+// operators or models), $5 days (0 = all time), $6 max rows, $7 ICAO type
+// codes (the key itself, codes it starts, and types whose name has it, so
+// "KC-135R", "Stratotanker" and "K35" all find K35R).
 const searchSQL = `
 	WITH ` + searchLiveCTE + `,
 	cand AS (
@@ -165,8 +167,10 @@ const searchSQL = `
 		UNION SELECT hex, 'registration' FROM k4nza_aircraft_seen WHERE ` + regKeyR + ` LIKE $2 || '%'
 		UNION SELECT hex, 'registration' FROM live WHERE ` + regKeyR + ` LIKE $2 || '%'
 		UNION SELECT mode_s, 'registration' FROM registration_data WHERE ` + regKeyRegistration + ` LIKE $2 || '%'
-		UNION SELECT hex, 'type' FROM k4nza_aircraft_seen WHERE t = $2
-		UNION SELECT hex, 'type' FROM live WHERE t = $2
+		UNION SELECT hex, 'type' FROM k4nza_aircraft_seen WHERE t = ANY($7)
+		UNION SELECT hex, 'type' FROM live WHERE t = ANY($7)
+		UNION SELECT mode_s, 'type' FROM registration_data WHERE $4 <> '' AND (type ILIKE $4 OR icao_type = ANY($7))
+		UNION SELECT lower(icao), 'type' FROM interesting_aircraft WHERE $4 <> '' AND type ILIKE $4
 		UNION SELECT hex, 'callsign' FROM k4nza_callsign_seen WHERE flight LIKE $2 || '%'
 		UNION SELECT hex, 'callsign' FROM live WHERE EXISTS (SELECT 1 FROM unnest(flights) f WHERE f LIKE $2 || '%')
 		UNION SELECT mode_s, 'operator' FROM registration_data WHERE $4 <> '' AND registered_owner ILIKE $4
@@ -283,7 +287,8 @@ func (s *APIServer) search(c *gin.Context) {
 		if len(terms.raw) >= 3 {
 			operator = "%" + escapeLike(terms.raw) + "%"
 		}
-		rows, err = s.pg.db.Query(ctx, searchSQL, w, escapeLike(terms.key), terms.hex, operator, days, maxResults+1)
+		types := data.MatchTypeCodes(terms.key, 60)
+		rows, err = s.pg.db.Query(ctx, searchSQL, w, escapeLike(terms.key), terms.hex, operator, days, maxResults+1, types)
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("search failed")

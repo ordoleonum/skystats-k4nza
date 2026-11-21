@@ -448,6 +448,11 @@ func (s *APIServer) getAboveStats(c *gin.Context) {
 func (s *APIServer) getRecentInterestingAircraft(c *gin.Context, group string) {
 
 	limit := s.getLimit("interesting_table_limit")
+	// K4NZA: the Search tab's "Recently seen interesting aircraft" asks for
+	// more than the Interesting tab shows (?limit=, at most 200)
+	if n, err := strconv.Atoi(c.Query("limit")); err == nil && n > 0 && n <= 200 {
+		limit = n
+	}
 
 	query := `
 		WITH latest_unique_reg AS (

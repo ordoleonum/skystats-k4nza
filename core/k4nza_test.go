@@ -183,3 +183,32 @@ func TestTypeNames(t *testing.T) {
 		t.Errorf("unknown code found")
 	}
 }
+
+func TestMatchTypeCodes(t *testing.T) {
+	has := func(list []string, code string) bool {
+		for _, c := range list {
+			if c == code {
+				return true
+			}
+		}
+		return false
+	}
+	for key, want := range map[string]string{
+		"KC135R": "K35R", "STRATOTANKER": "K35R", "K35": "K35R", "BLACKHAWK": "H60", "737": "B738", "GLOBEMASTER": "C17",
+	} {
+		if got := data.MatchTypeCodes(key, 60); !has(got, want) {
+			t.Errorf("MatchTypeCodes(%q) = %v, want it to include %s", key, got, want)
+		}
+	}
+	// an exact code is just that code: C17 must not bring in the Cessna 170s
+	if got := data.MatchTypeCodes("C17", 60); len(got) != 1 || got[0] != "C17" {
+		t.Errorf("MatchTypeCodes(C17) = %v, want [C17]", got)
+	}
+	// short or unknown text: only itself
+	if got := data.MatchTypeCodes("N1", 60); len(got) != 1 {
+		t.Errorf("MatchTypeCodes(N1) = %v", got)
+	}
+	if got := data.MatchTypeCodes("737", 5); len(got) != 5 {
+		t.Errorf("limit not kept: %v", got)
+	}
+}

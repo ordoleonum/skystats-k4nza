@@ -262,18 +262,21 @@
     const groupKeys = ['Mil', 'Gov', 'Pol', 'Civ'];
     const groupEndpoint = { Mil: 'military', Gov: 'government', Pol: 'police', Civ: 'civilian' };
     let recentInteresting = null;
+    // the latest 100 of each group; 10 rows shown until "See more"
+    const RECENT_FETCH = 100;
+    let recentExpanded = false;
+    $: recentRows = recentInteresting ? (recentExpanded ? recentInteresting : recentInteresting.slice(0, COLLAPSED)) : [];
     async function loadRecentInteresting() {
         try {
             const lists = await Promise.all(groupKeys.map(async (g) => {
-                const res = await fetch(`api/stats/interesting/${groupEndpoint[g]}`);
+                const res = await fetch(`api/stats/interesting/${groupEndpoint[g]}?limit=${RECENT_FETCH}`);
                 if (!res.ok) return [];
                 return (await res.json()).map((a) => ({ ...a, group: a.group || g }));
             }));
             recentInteresting = lists.flat()
                 .filter((a) => a.hex)
                 .sort((a, b) => new Date(b.seen) - new Date(a.seen))
-                .filter((a, i, all) => all.findIndex((x) => x.hex === a.hex) === i) // once per aircraft
-                .slice(0, 10);
+                .filter((a, i, all) => all.findIndex((x) => x.hex === a.hex) === i); // once per aircraft
         } catch (e) {
             recentInteresting = [];
         }
@@ -378,7 +381,7 @@
                 <div class="overflow-x-auto">
                     <table class="table table-sm">
                         <tbody>
-                            {#each recentInteresting as a (a.hex)}
+                            {#each recentRows as a (a.hex)}
                                 <tr class="hover cursor-pointer {detail?.hex === a.hex ? 'bg-base-200' : ''}" on:click={() => openAircraft(a.hex, 'recent')}>
                                     <td class="font-mono whitespace-nowrap">
                                         <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex, 'recent')}>{a.registration || a.hex.toUpperCase()}</button>
@@ -398,6 +401,13 @@
                         </tbody>
                     </table>
                 </div>
+                {#if recentInteresting.length > COLLAPSED}
+                    <div class="flex justify-center mt-2">
+                        <button type="button" class="btn btn-sm btn-outline" on:click={() => (recentExpanded = !recentExpanded)} aria-expanded={recentExpanded}>
+                            {recentExpanded ? 'See less' : `See more (${(recentInteresting.length - COLLAPSED).toLocaleString()} more)`}
+                        </button>
+                    </div>
+                {/if}
             {/if}
         </div>
     </div>
