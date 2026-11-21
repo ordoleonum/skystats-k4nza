@@ -25,6 +25,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
+	"github.com/tomcarman/skystats/data"
 )
 
 // sameOriginWrites refuses requests that would change something when the
@@ -426,17 +427,21 @@ func (s *APIServer) searchAircraft(c *gin.Context) {
 			info["type"] = icaoType
 		}
 	}
+	// the type in words, from the ICAO type list (when the lookups have no model)
+	if name, ok := data.LookupTypeName(fmt.Sprint(info["type"])); ok {
+		info["type_name"] = name
+	}
 	var iaOperator, iaGroup, iaCategory, iaLink, iaType, tag1, tag2, tag3 string
 	if err := s.pg.db.QueryRow(ctx, `
 		SELECT COALESCE(operator, ''), COALESCE("group", ''), COALESCE(category, ''), COALESCE(link, ''),
 		       COALESCE(type, ''), COALESCE(tag1, ''), COALESCE(tag2, ''), COALESCE(tag3, '')
 		FROM (
-			SELECT 1 AS o, operator, "group", category, link, type, tag1, tag2, tag3
+			SELECT 1 AS o, operator, "group", category, link, type, tag1, tag2, tag3, NULL::timestamptz AS seen
 			FROM interesting_aircraft WHERE icao = upper($1)
 			UNION ALL
-			SELECT 2, operator, "group", category, link, type, tag1, tag2, tag3
+			SELECT 2, operator, "group", category, link, type, tag1, tag2, tag3, seen
 			FROM interesting_aircraft_seen WHERE icao = upper($1)
-		) x ORDER BY o LIMIT 1`, hex).
+		) x ORDER BY o, COALESCE(operator, '') = '', seen DESC NULLS LAST LIMIT 1`, hex).
 		Scan(&iaOperator, &iaGroup, &iaCategory, &iaLink, &iaType, &tag1, &tag2, &tag3); err == nil {
 		info["interesting"] = gin.H{
 			"operator": iaOperator, "group": iaGroup, "category": iaCategory, "link": iaLink,

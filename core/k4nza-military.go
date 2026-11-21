@@ -26,6 +26,25 @@ func nullText(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: s != ""}
 }
 
+// niceCase turns the feeder database's ALL CAPS text ("UNITED STATES AIR
+// FORCE", "GULFSTREAM 5") into "United States Air Force", "Gulfstream 5".
+// Text with lower case letters is kept; so are short words (US, LLC, NA) and
+// words with digits (C-37A).
+func niceCase(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if s == "" || strings.ToUpper(s) != s {
+		return s
+	}
+	words := strings.Split(s, " ")
+	for i, w := range words {
+		if len(w) <= 3 || strings.ContainsAny(w, "0123456789") {
+			continue
+		}
+		words[i] = w[:1] + strings.ToLower(w[1:])
+	}
+	return strings.Join(words, " ")
+}
+
 // copyLiveFields fills in what was seen live (position, callsign, time).
 func copyLiveFields(ia *InterestingAircraft, aircraft Aircraft) {
 	ia.Hex = aircraft.Hex
@@ -59,6 +78,10 @@ func feederMilitary(aircraft Aircraft) (InterestingAircraft, bool) {
 		IcaoType:     nullText(aircraft.T),
 		Group:        sql.NullString{String: feederMilitaryGroup, Valid: true},
 		Category:     sql.NullString{String: feederMilitaryOrigin, Valid: true},
+		// what the feeder's own database knows: owner / operator and the
+		// type in words (plane-alert-db's operator and type columns)
+		Operator: nullText(niceCase(aircraft.OwnOp)),
+		Type:     nullText(niceCase(aircraft.Desc)),
 	}
 	copyLiveFields(&ia, aircraft)
 	return ia, true

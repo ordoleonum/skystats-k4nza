@@ -66,7 +66,7 @@
             limit = body.limit || 200;
             searchedFor = q;
             detail = null;
-            if (results.length === 1) openAircraft(results[0].hex, false);
+            if (results.length === 1) openAircraft(results[0].hex, 'direct');
         } catch (e) {
             if (mine === seq) error = `Search failed: ${e.message}`;
         } finally {
@@ -138,20 +138,23 @@
     $: rows = expanded ? shown : shown.slice(0, COLLAPSED);
     const arrow = (key, k, d) => (k === key ? (d > 0 ? ' ▲' : ' ▼') : '');
 
-    let loadingHex = ''; // the result row whose details are loading (shown under it)
-    async function openAircraft(hex, fromList = true) {
-        if (fromList && detail?.hex === hex && detail.fromList) {
+    // where the details open: 'list' (under a result row), 'recent' (under a row
+    // of the recently seen list, before any search) or 'direct' (a search with a
+    // single match: shown on its own)
+    let loadingHex = ''; // the row whose details are loading (shown under it)
+    async function openAircraft(hex, from = 'list') {
+        if (from !== 'direct' && detail?.hex === hex && detail.from === from) {
             detail = null; // a second click on the open row closes it
             return;
         }
-        loadingHex = fromList ? hex : '';
+        loadingHex = from !== 'direct' ? hex : '';
         detailLoading = true;
         error = '';
         try {
             const res = await fetch(`api/search/aircraft/${encodeURIComponent(hex)}?limit=${PAGE}`);
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || res.statusText);
-            detail = { ...body, fromList };
+            detail = { ...body, from };
             loadPhoto(body);
             visitsMore = body.visits_list.length === PAGE && body.visits_in_history > PAGE;
             await tick();
@@ -199,6 +202,7 @@
         const names = [];
         if (model) names.push(maker && !model.toLowerCase().includes(maker.toLowerCase().split(' ')[0]) ? `${maker} ${model}` : model);
         if (d.interesting?.type) names.push(d.interesting.type.trim());
+        if (d.type_name) names.push(d.type_name);
         if (d.type) names.push(d.type.trim());
         for (const name of [...new Set(names)]) {
             try {
@@ -271,13 +275,9 @@
         const o = airport(v.origin, v.origin_icao), d = airport(v.destination, v.destination_icao);
         return o && d ? `${o} to ${d}` : '–';
     }
-    // FlightAware, the same link the live map uses for a registration (the
-    // aircraft may not be in range now); by hex code when there's no registration
-    function flightAwareLink(d) {
-        const reg = (d.registration || '').trim();
-        if (reg) return `https://flightaware.com/live/flight/${encodeURIComponent(reg)}`;
-        return `https://flightaware.com/live/modes/${encodeURIComponent(d.hex.replace('~', ''))}/redirect`;
-    }
+    // ADSBExchange's map, by hex code (it shows the aircraft live when it's
+    // flying, and its history from there)
+    const adsbxLink = (d) => `https://globe.adsbexchange.com/?icao=${encodeURIComponent(d.hex.toLowerCase())}`;
     const groupBadge = { Mil: 'Military', Gov: 'Government', Pol: 'Police', Civ: 'Civilian' };
     const FEEDER_MILITARY = 'Military (feeder database)';
     // no photo: a plane or helicopter outline with the type, instead of an empty box
@@ -390,7 +390,7 @@
     <div class="alert alert-error mb-6"><span>{error}</span></div>
 {/if}
 
-{#if !group && !results && !loading && !detail && !error}
+{#if !group && !results && !loading && !error && !(detail && detail.from !== 'recent')}
     <div class="card bg-base-100 shadow-sm rounded mb-6">
         <div class="card-body">
             <div class="flex flex-wrap items-center gap-2">
@@ -405,9 +405,9 @@
                     <table class="table table-sm">
                         <tbody>
                             {#each recentInteresting as a (a.hex)}
-                                <tr class="hover cursor-pointer" on:click={() => openAircraft(a.hex, false)}>
+                                <tr class="hover cursor-pointer {detail?.hex === a.hex ? 'bg-base-200' : ''}" on:click={() => openAircraft(a.hex, 'recent')}>
                                     <td class="font-mono whitespace-nowrap">
-                                        <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex, false)}>{a.registration || a.hex.toUpperCase()}</button>
+                                        <button class="link link-hover link-primary" on:click|stopPropagation={() => openAircraft(a.hex, 'recent')}>{a.registration || a.hex.toUpperCase()}</button>
                                         <div class="sm:hidden text-xs text-base-content/60 font-sans">{a.operator || ''}</div>
                                     </td>
                                     <td class="hidden sm:table-cell">{a.operator || '–'}</td>
@@ -415,6 +415,11 @@
                                         {#if groupBadge[a.group]}<span class="badge badge-sm grp-badge grp-{a.group} ml-1">{groupBadge[a.group]}</span>{/if}</td>
                                     <td class="whitespace-nowrap text-right">{fmtDate(a.seen)}</td>
                                 </tr>
+                                {#if detailLoading && loadingHex === a.hex}
+                                    <tr><td colspan="4"><div class="flex justify-center py-4"><span class="loading loading-ring loading-md"></span></div></td></tr>
+                                {:else if detail && detail.from === 'recent' && detail.hex === a.hex}
+                                    <tr class="search-detail-row"><td colspan="4" class="px-0 pt-1 pb-3 text-base whitespace-normal">{@render detailCard()}</td></tr>
+                                {/if}
                             {/each}
                         </tbody>
                     </table>
@@ -435,7 +440,7 @@
 {#snippet detailCard()}
     <div id="search-detail" class="card bg-base-100 shadow-sm rounded mb-6 scroll-mt-20">
         <div class="card-body">
-            {#if detail.fromList && results && results.length > 1}
+            {#if detail.from !== 'direct'}
                 <button class="btn btn-ghost btn-sm self-start -ml-2 mb-1" on:click={() => (detail = null)}>
                     <IconX class="w-4 h-4" /> Close
                 </button>
@@ -469,16 +474,16 @@
                         {/if}
                     </h3>
                     {#if detail.interesting?.category === FEEDER_MILITARY}
-                        <p class="text-xs text-base-content/60">Marked military by the feeder's aircraft database (not on the plane-alert list, so no operator or extra details).</p>
+                        <p class="text-xs text-base-content/60">Marked military by the feeder's aircraft database (it isn't on the plane-alert list{detail.interesting.operator ? '' : ', and the database has no operator for it'}).</p>
                     {/if}
                     <p class="text-sm text-base-content/70">
-                        {[detail.manufacturer, detail.model].filter(Boolean).join(' ')}{detail.type ? ` (${detail.type})` : ''}
+                        {[detail.manufacturer, detail.model].filter(Boolean).join(' ') || detail.interesting?.type || detail.type_name || ''}{detail.type ? ` (${detail.type})` : ''}
                         · hex <span class="font-mono">{detail.hex.toUpperCase()}</span>
                         {#if detail.owner_country}· registered in {detail.owner_country}{/if}
                     </p>
                     <div class="flex flex-wrap gap-3 mt-2 text-sm">
-                        <a class="link link-primary inline-flex items-center gap-1" href={flightAwareLink(detail)} target="_blank" rel="noopener noreferrer">
-                            <IconExternalLink class="w-4 h-4" /> View on FlightAware
+                        <a class="link link-primary inline-flex items-center gap-1" href={adsbxLink(detail)} target="_blank" rel="noopener noreferrer">
+                            <IconExternalLink class="w-4 h-4" /> View on ADSBExchange
                         </a>
                         {#if detail.interesting?.link}
                             <a class="link link-primary" href={detail.interesting.link} target="_blank" rel="noopener noreferrer">More about this aircraft</a>
@@ -541,11 +546,11 @@
     </div>
 {/snippet}
 
-{#if detail && !detail.fromList}
+{#if detail && detail.from === 'direct'}
     {@render detailCard()}
 {/if}
 
-{#if results && !(detail && !detail.fromList)}
+{#if results && !(detail && detail.from === 'direct')}
     <div class="card bg-base-100 shadow-sm rounded mb-6">
         <div class="card-body">
             {#if results.length === 0}
@@ -591,7 +596,7 @@
                                 </tr>
                                 {#if detailLoading && loadingHex === a.hex}
                                     <tr><td colspan="5"><div class="flex justify-center py-4"><span class="loading loading-ring loading-md"></span></div></td></tr>
-                                {:else if detail && detail.fromList && detail.hex === a.hex}
+                                {:else if detail && detail.from === 'list' && detail.hex === a.hex}
                                     <tr class="search-detail-row"><td colspan="5" class="px-0 pt-1 pb-3 text-base whitespace-normal">{@render detailCard()}</td></tr>
                                 {/if}
                             {/each}

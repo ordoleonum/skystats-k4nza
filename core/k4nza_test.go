@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tomcarman/skystats/data"
 )
 
 func TestParseSearchNormalises(t *testing.T) {
@@ -138,5 +139,41 @@ func TestFeederMilitary(t *testing.T) {
 	}
 	if _, ok := feederMilitary(Aircraft{Hex: " ", DbFlags: 1}); ok {
 		t.Errorf("empty hex tagged as military")
+	}
+}
+
+func TestFeederMilitaryDetails(t *testing.T) {
+	ia, _ := feederMilitary(Aircraft{Hex: "ae1234", DbFlags: 1, OwnOp: "UNITED STATES AIR FORCE", Desc: "BOEING C-32A"})
+	if ia.Operator.String != "United States Air Force" || ia.Type.String != "Boeing C-32A" {
+		t.Errorf("feeder database details: %q / %q", ia.Operator.String, ia.Type.String)
+	}
+	if ia, _ := feederMilitary(Aircraft{Hex: "ae1235", DbFlags: 1}); ia.Operator.Valid || ia.Type.Valid {
+		t.Errorf("empty details stored: %+v", ia)
+	}
+	for in, want := range map[string]string{
+		"GULFSTREAM 5":        "Gulfstream 5",
+		"U S BANK NA TRUSTEE": "U S Bank NA Trustee",
+		"Cargojet Airways":    "Cargojet Airways",
+		"  ":                  "",
+	} {
+		if got := niceCase(in); got != want {
+			t.Errorf("niceCase(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestTypeNames(t *testing.T) {
+	for code, want := range map[string]string{
+		"B738": "Boeing 737-800",
+		"b38m": "Boeing 737 MAX 8",
+		"MD11": "McDonnell-Douglas MD-11",
+		"DH8D": "de Havilland DHC-8-400 Dash 8",
+	} {
+		if got, ok := data.LookupTypeName(code); !ok || got != want {
+			t.Errorf("LookupTypeName(%q) = %q, %v; want %q", code, got, ok, want)
+		}
+	}
+	if _, ok := data.LookupTypeName("ZZZZ"); ok {
+		t.Errorf("unknown code found")
 	}
 }

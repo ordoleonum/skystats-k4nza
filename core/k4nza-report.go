@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tomcarman/skystats/data"
 )
 
 type reportPeriod struct {
@@ -321,12 +322,23 @@ func (s *APIServer) k4nzaReport(c *gin.Context) {
 }
 
 // typeNames: a readable name for ICAO type codes ("B738" -> "Boeing 737-800"),
-// from the registration lookups SkyStats has stored (the commonest name per code).
+// from the ICAO type list (data/icao_types.csv); codes not on it use the
+// registration lookups SkyStats has stored (the commonest name per code),
+// which are often raw model strings such as "737NG 823/W".
 func (s *APIServer) typeNames(ctx context.Context, codes []string) map[string]string {
 	names := map[string]string{}
-	if len(codes) == 0 {
+	missing := []string{}
+	for _, code := range codes {
+		if name, ok := data.LookupTypeName(code); ok {
+			names[code] = name
+		} else {
+			missing = append(missing, code)
+		}
+	}
+	if len(missing) == 0 {
 		return names
 	}
+	codes = missing
 	rows, err := s.pg.db.Query(ctx, `
 		SELECT icao_type, mode() WITHIN GROUP (ORDER BY TRIM(COALESCE(manufacturer, '') || ' ' || COALESCE(type, '')))
 		FROM registration_data

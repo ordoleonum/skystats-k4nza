@@ -270,24 +270,6 @@
 
   <div class="rep-two">
     <section class="dl-card">
-      <h2 class="dl-h2 rep-mb">Who flew over most</h2>
-      {#if airlines.length}
-        <div class="rep-bars" role="list">
-          {#each airlines as a}
-            <div class="rep-bar-row" role="listitem" title="{a.name}: {num(a.flights)} flights">
-              <span class="rep-bar-name">{a.name}</span>
-              <span class="rep-bar-track"><span class="rep-bar" style="width: {Math.max(2, Math.round(a.flights / airlineMax * 100))}%"></span></span>
-              <span class="rep-bar-n dl-mono">{num(a.flights)}</span>
-            </div>
-          {/each}
-        </div>
-        <p class="dl-note rep-foot">Flights with a known route, by airline.</p>
-      {:else if !loading}
-        <p class="dl-note">No flights with a known airline {span} yet.</p>
-      {/if}
-    </section>
-
-    <section class="dl-card">
       <h2 class="dl-h2 rep-mb">Aircraft types</h2>
       {#if types.length}
         <div class="rep-bars" role="list">
@@ -305,6 +287,24 @@
         <p class="dl-note rep-foot">Different aircraft of each type.</p>
       {:else if !loading}
         <p class="dl-note">No aircraft types {span} yet.</p>
+      {/if}
+    </section>
+
+    <section class="dl-card">
+      <h2 class="dl-h2 rep-mb">Who flew over most</h2>
+      {#if airlines.length}
+        <div class="rep-bars" role="list">
+          {#each airlines as a}
+            <div class="rep-bar-row" role="listitem" title="{a.name}: {num(a.flights)} flights">
+              <span class="rep-bar-name">{a.name}</span>
+              <span class="rep-bar-track"><span class="rep-bar" style="width: {Math.max(2, Math.round(a.flights / airlineMax * 100))}%"></span></span>
+              <span class="rep-bar-n dl-mono">{num(a.flights)}</span>
+            </div>
+          {/each}
+        </div>
+        <p class="dl-note rep-foot">Flights with a known route, by airline.</p>
+      {:else if !loading}
+        <p class="dl-note">No flights with a known airline {span} yet.</p>
       {/if}
     </section>
   </div>

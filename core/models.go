@@ -49,6 +49,8 @@ type Aircraft struct {
 	Seen                float64 `json:"seen"`
 	Rssi                float64 `json:"rssi"`
 	DbFlags             int     `json:"dbFlags"`
+	Desc                string  `json:"desc"`  // the feeder's aircraft database: type description
+	OwnOp               string  `json:"ownOp"` // ... owner / operator
 	Squawk              string  `json:"squawk"`
 	Category            string  `json:"category"`
 	FirstSeen           time.Time
