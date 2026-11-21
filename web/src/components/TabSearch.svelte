@@ -6,6 +6,7 @@
     import { units } from '../stores/units';
     import { formatDistanceKm, formatAltitude } from '../lib/units';
     import { replayUrl } from '../lib/feeder.js';
+    import { wikiTypePhoto } from '../lib/photos.js';
 
     let query = '';
     let days = '0';
@@ -190,44 +191,15 @@
         if (detail?.hex === hex) photo = found; // still the same aircraft
     }
 
-    // Wikipedia's photo of the aircraft TYPE. Searched by the full name first
-    // (registration lookup, then plane-alert-db), then by the ICAO type code.
-    // A result is only used if Wikipedia describes it as an aircraft: bare codes
-    // also find engines, ships and lists (T38 is also an engine).
-    const WIKI_AIRCRAFT = /aircraft|airliner|trainer|fighter|helicopter|bomber|tanker|airlifter|airplane|aeroplane|jet|plane|glider|gunship/i;
-    const WIKI_NOT = /engine|list of|family of|disambiguation|airport|airline|company|manufacturer|ship|car|vehicle/i;
-    async function typePhoto(d) {
+    // Wikipedia's photo of the aircraft TYPE (lib/photos.js): the full name
+    // first (registration lookup, plane-alert-db, ICAO type list), then the code
+    function typePhoto(d) {
         const model = (d.model || '').trim();
         const maker = (d.manufacturer || '').trim();
         const names = [];
         if (model) names.push(maker && !model.toLowerCase().includes(maker.toLowerCase().split(' ')[0]) ? `${maker} ${model}` : model);
-        if (d.interesting?.type) names.push(d.interesting.type.trim());
-        if (d.type_name) names.push(d.type_name);
-        if (d.type) names.push(d.type.trim());
-        for (const name of [...new Set(names)]) {
-            try {
-                const url = 'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=5' +
-                    '&prop=pageimages|description&piprop=thumbnail&pithumbsize=400&format=json&origin=*&gsrsearch=' +
-                    encodeURIComponent(`${name} aircraft`);
-                const res = await fetch(url);
-                if (!res.ok) return null;
-                const pages = Object.values((await res.json()).query?.pages || {}).sort((a, b) => a.index - b.index);
-                // photos only (JPEG): drawings and silhouettes are PNG or SVG
-                const page = pages.find((p) => /\.jpe?g/i.test(p.thumbnail?.source || '') && WIKI_AIRCRAFT.test(p.description || '') &&
-                    !WIKI_NOT.test(`${p.description || ''} ${p.title}`));
-                if (page) {
-                    return {
-                        src: page.thumbnail.source,
-                        link: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/ /g, '_'))}`,
-                        photographer: 'Wikipedia',
-                        typical: d.type || model,
-                    };
-                }
-            } catch (e) {
-                return null; // offline or blocked: the outline is shown
-            }
-        }
-        return null;
+        names.push(d.interesting?.type, d.type_name, d.type);
+        return wikiTypePhoto(names, d.type || model);
     }
 
     async function loadMoreVisits() {

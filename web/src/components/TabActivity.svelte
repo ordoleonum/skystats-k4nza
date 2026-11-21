@@ -10,6 +10,7 @@
   import { fromNm, distanceLabel } from '../lib/units';
   import { replayUrl } from '../lib/feeder.js';
   import { searchFor } from '../lib/search.js';
+  import { wikiTypePhoto } from '../lib/photos.js';
 
   export let active = true;
 
@@ -67,7 +68,8 @@
     load();
   }
 
-  // a photo for each notable visitor (planespotters.net, as on the Search tab)
+  // a photo for each notable visitor: planespotters.net, else a photo of its
+  // type from Wikipedia (marked as such), as on the Search tab
   async function loadPhotos(list) {
     for (const v of list) {
       if (!v.hex || v.hex in photos) continue;
@@ -82,6 +84,13 @@
           photos = photos;
         }
       } catch (e) { /* no photo */ }
+      if (!photos[v.hex]) {
+        const t = await wikiTypePhoto([v.model, v.type], v.type || v.model);
+        if (t) {
+          photos[v.hex] = { src: t.src, link: t.link, by: 'Wikipedia', typical: t.typical };
+          photos = photos;
+        }
+      }
     }
   }
 
@@ -338,8 +347,9 @@
           <article class="rep-visitor">
             <div class="rep-photo">
               {#if photos[v.hex]}
-                <a href={photos[v.hex].link} target="_blank" rel="noopener noreferrer" title="Photo: {photos[v.hex].by} (planespotters.net)">
-                  <img src={photos[v.hex].src} alt="{title(v)}" loading="lazy" />
+                <a href={photos[v.hex].link} target="_blank" rel="noopener noreferrer" title={photos[v.hex].typical ? 'A photo of this type of aircraft, from Wikipedia' : `Photo: ${photos[v.hex].by} (planespotters.net)`}>
+                  <img src={photos[v.hex].src} alt={photos[v.hex].typical ? `Typical ${photos[v.hex].typical}, not this aircraft` : title(v)} loading="lazy" referrerpolicy="no-referrer" />
+                  {#if photos[v.hex].typical}<span class="rep-typical">Typical {photos[v.hex].typical}, not this aircraft</span>{/if}
                 </a>
               {:else}
                 <span>No photo</span>
@@ -420,6 +430,8 @@
   .rep-photo { height: 140px; background: var(--dl-photo); display: flex; align-items: center; justify-content: center; color: var(--dl-muted); font-size: 13px; font-weight: 600; }
   .rep-photo a, .rep-photo img { display: block; width: 100%; height: 100%; }
   .rep-photo img { object-fit: cover; }
+  .rep-photo a { position: relative; }
+  .rep-typical { position: absolute; top: 6px; left: 6px; max-width: calc(100% - 12px); padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rep-visitor-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
   .rep-visitor-title { font-size: 18px; font-weight: 800; text-align: left; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; }
   .rep-visitor-title:hover { color: var(--dl-accent); }
