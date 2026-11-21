@@ -1,4 +1,4 @@
-package core
+package main
 
 // The feeder's home page summary (Daylight dashboard): what happened today at
 // this station, in one small request. All times are the viewer's local day.
