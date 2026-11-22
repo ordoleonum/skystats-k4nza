@@ -329,7 +329,7 @@ func validHex(h string) (string, bool) {
 const visitsSQL = `
 	SELECT a.first_seen, a.last_seen, COALESCE(a.flight, ''),
 	       LEAST(a.min_distance, a.last_seen_distance, NULLIF(a.r_dst, 0) * 1.852)::float8,
-	       a.alt_baro, a.gs::float8, COALESCE(a.squawk, ''),
+	       a.alt_baro, NULLIF(a.gs, 0)::float8, COALESCE(a.squawk, ''),
 	       COALESCE(ro.origin_iata_code, ''), COALESCE(ro.origin_icao_code, ''), COALESCE(ro.origin_name, ''),
 	       COALESCE(ro.destination_iata_code, ''), COALESCE(ro.destination_icao_code, ''), COALESCE(ro.destination_name, ''),
 	       COALESCE(ro.airline_name, '')
@@ -495,7 +495,7 @@ func (s *APIServer) searchAircraftCSV(c *gin.Context) {
 				COALESCE(NULLIF(a.t, ''), rd.icao_type) AS aircraft_type,
 				ro.airline_name, ro.origin_iata_code AS origin, ro.origin_name,
 				ro.destination_iata_code AS destination, ro.destination_name,
-				a.alt_baro AS max_altitude_ft, a.gs AS max_ground_speed_kt,
+				a.alt_baro AS max_altitude_ft, NULLIF(a.gs, 0) AS max_ground_speed_kt,
 				ROUND(LEAST(a.min_distance, a.last_seen_distance, NULLIF(a.r_dst, 0) * 1.852), 2) AS closest_km,
 				ROUND(LEAST(a.min_distance, a.last_seen_distance, NULLIF(a.r_dst, 0) * 1.852) / 1.609344, 2) AS closest_mi,
 				ROUND(LEAST(a.min_distance, a.last_seen_distance, NULLIF(a.r_dst, 0) * 1.852) / 1.852, 2) AS closest_nm,
