@@ -19,8 +19,9 @@ func TestRecordsUseFinishedVisits(t *testing.T) {
 		t.Helper()
 		first := lastSeen.Add(-10 * time.Minute)
 		if _, err := pg.db.Exec(ctx, `
-			INSERT INTO aircraft_data (hex, r, t, first_seen, first_seen_epoch, last_seen, last_seen_epoch, alt_baro, gs)
-			VALUES ($1, $1, 'C172', $2, $3, $4, $5, $6, $7)`,
+			INSERT INTO aircraft_data (hex, flight, r, t, first_seen, first_seen_epoch, last_seen, last_seen_epoch,
+			                           alt_baro, alt_geom, gs, ias, tas)
+			VALUES ($1, '', $1, 'C172', $2, $3, $4, $5, $6, 0, $7, 0, 0)`,
 			hex, first, first.Unix(), lastSeen, lastSeen.Unix(), altBaro, gs); err != nil {
 			t.Fatalf("insert %s: %v", hex, err)
 		}
