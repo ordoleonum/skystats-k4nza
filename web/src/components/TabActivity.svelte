@@ -6,7 +6,6 @@
   import { stationTz } from '../lib/stationTz.js';
   import ActivityRangeByDirection from './ActivityRangeByDirection.svelte';
   import ActivitySignalVsDistance from './ActivitySignalVsDistance.svelte';
-  import AboveTimeline from './AboveTimeline.svelte';
   import { units } from '../stores/units';
   import { fromNm, distanceLabel } from '../lib/units';
   import { replayUrl } from '../lib/feeder.js';
@@ -372,11 +371,6 @@
     {:else if !loading}
       <div class="dl-card"><p class="dl-note">No military, government, police or other interesting aircraft {span}.</p></div>
     {/if}
-  </section>
-
-  <section class="rep-above">
-    <h2 class="dl-h2 rep-mb">Tracking right now</h2>
-    <AboveTimeline />
   </section>
 </div>
 
