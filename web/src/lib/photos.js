@@ -4,9 +4,23 @@
 // Wikipedia describes it as an aircraft (bare codes also find engines, ships
 // and lists: T38 is also an engine) and its picture is a photo (JPEG), not a
 // drawing or silhouette.
-const WIKI_AIRCRAFT = /aircraft|airliner|trainer|fighter|helicopter|bomber|tanker|airlifter|airplane|aeroplane|jet|plane|glider|gunship/i;
 // whole words only: "airline" must not match "Airliner"
-const WIKI_NOT = /\b(engine|list of|family of|disambiguation|airport|airline|company|manufacturer|ship|car|vehicle|facility|factory|plant|assembly|museum|base|squadron)\b/i;
+const WIKI_NOT = /\b(list of|disambiguation|airports?|airlines?|company|manufacturer|ships?|cars?|vehicles?|facility|factory|plant|assembly|museum|base|squadron|crash|accident|incident|disaster|category)\b/i;
+// A page counts as an aircraft when its description names an aircraft and no
+// engine ("single engine aircraft" and "twin-engine helicopter" yes, "turbojet aircraft engine" no).
+// Among those, a page whose title is part of the searched name wins (UH-60 Black
+// Hawk over HH-60 Pave Hawk), else the first one Wikipedia ranks.
+const WIKI_AIRCRAFT = /aircraft|airliner|trainer|fighter|helicopter|bomber|tanker|airlifter|airplane|aeroplane|jet|plane|glider|gunship/i;
+function wikiPick(pages, name) {
+  const key = (s) => String(s || "").toLowerCase().replace(/\s*\(.*\)$/, "").replace(/[^a-z0-9]/g, "");
+  const ok = pages.filter((pg) => {
+    const d = pg.description || "";
+    const engine = /\bengines?\b/i.test(d.replace(/\b(single|twin|multi|two|three|four|six|eight)[- ]engines?\b/gi, ""));
+    return pg.thumbnail && /\.jpe?g/i.test(pg.thumbnail.source) && WIKI_AIRCRAFT.test(d) && !engine &&
+      !WIKI_NOT.test(d + " " + pg.title);
+  });
+  return ok.find((pg) => key(pg.title).length >= 3 && key(name).includes(key(pg.title))) || ok[0] || null;
+}
 
 export async function wikiTypePhoto(names, typical) {
     for (const name of [...new Set(names.map((n) => (n || '').trim()).filter(Boolean))]) {
@@ -17,8 +31,7 @@ export async function wikiTypePhoto(names, typical) {
             const res = await fetch(url);
             if (!res.ok) return null;
             const pages = Object.values((await res.json()).query?.pages || {}).sort((a, b) => a.index - b.index);
-            const page = pages.find((p) => /\.jpe?g/i.test(p.thumbnail?.source || '') && WIKI_AIRCRAFT.test(p.description || '') &&
-                !WIKI_NOT.test(`${p.description || ''} ${p.title}`));
+            const page = wikiPick(pages, name);
             if (page) {
                 return {
                     src: page.thumbnail.source,
