@@ -1,5 +1,5 @@
 <script>
-  import { IconSettings, IconDownload, IconSearch } from '@tabler/icons-svelte';
+  import { IconSettings, IconSearch } from '@tabler/icons-svelte';
   import ThemeSelector from './components/ThemeSelector.svelte';
   import TabRouteStats from './components/TabRouteStats.svelte';
   import TabMotionStats from './components/TabMotionStats.svelte';
@@ -54,12 +54,6 @@
   // "All interesting aircraft" on the Activity tab
   window.addEventListener('skystats-open-tab', (e) => setActiveTab(e.detail));
 
-  // one-click access to data export
-  function openExport() {
-      window.dispatchEvent(new Event('skystats-open-export'));
-      document.getElementById("settings-modal").showModal();
-  }
-
   // "k4nza build -34", as in the feeder's top bar: the K4NZA release number only
   $: release = ($feederInfo.feeder_version.match(/-(\d+)\s*$/) || [])[1];
   $: tagline = 'k4nza build' + (release ? ' -' + release : '');
@@ -86,9 +80,6 @@
         {/each}
       </nav>
       <div class="dl-header-btns">
-        <button type="button" class="dl-btn dl-icon-btn" on:click={openExport} aria-label="Export data" title="Download your recorded data (CSV / ZIP)">
-          <IconDownload class="h-5 w-5" />
-        </button>
         <button type="button" class="dl-btn dl-icon-btn" on:click={openSettingsModal} aria-label="Settings" title="Display settings and about">
           <IconSettings class="h-5 w-5" />
         </button>
