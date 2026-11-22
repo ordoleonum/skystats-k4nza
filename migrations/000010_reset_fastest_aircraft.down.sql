@@ -1,4 +1,2 @@
--- the removed entries can't be restored; swap the slowest airspeeds back
-UPDATE slowest_aircraft
-SET indicated_air_speed = true_air_speed,
-    true_air_speed = indicated_air_speed;
+-- the rebuilt record lists can't be turned back into the old ones
+SELECT 1;

@@ -219,6 +219,10 @@ func updateSlowestAircraft(pg *postgres, aircrafts []Aircraft) {
 		if aircraft.Gs < 1 {
 			continue
 		}
+		// K4NZA: never airborne while in view (taxiing, parked) - not a slow flyer
+		if aircraft.AltBaro < 1 {
+			continue
+		}
 
 		if aircraft.Gs < slowestAircraftCeiling {
 			aircraftsToInsert = append(aircraftsToInsert, aircraft)
@@ -367,19 +371,29 @@ func updateFastestAircraft(pg *postgres, aircrafts []Aircraft) {
 	}
 }
 
+// a visit is finished once its aircraft has been gone this long (seconds);
+// a little over the 600 s after which a returning aircraft starts a new visit
+const visitFinishedAfter = 660
+
 func getAircraftsForMeasurementStatistics(pg *postgres) []Aircraft {
 
 	query := `SELECT id, hex, flight, r, t, first_seen, last_seen, alt_baro, alt_geom, gs, ias, tas, 
 				lowest_aircraft_processed, highest_aircraft_processed, fastest_aircraft_processed, slowest_aircraft_processed
 				FROM aircraft_data
-				WHERE lowest_aircraft_processed = false OR
+				WHERE (lowest_aircraft_processed = false OR
 					highest_aircraft_processed = false OR
 					fastest_aircraft_processed = false OR
-					slowest_aircraft_processed = false
+					slowest_aircraft_processed = false)
+					-- K4NZA: only finished visits. A record used to be judged once, within
+					-- 2 minutes of the aircraft appearing, and never again: Slowest showed
+					-- planes taxiing before take-off, Lowest planes just after take-off.
+					-- A visit is finished once the aircraft has been gone longer than the
+					-- 10 minutes after which it would start a new visit.
+					AND last_seen_epoch < EXTRACT(EPOCH FROM NOW()) - $1
 				ORDER BY first_seen ASC
 				LIMIT 2000`
 
-	rows, err := pg.db.Query(context.Background(), query)
+	rows, err := pg.db.Query(context.Background(), query, visitFinishedAfter)
 	if err != nil {
 		log.Error().Err(err).Msg("getAircraftsForMeasurementStatistics() - Error querying db")
 		return nil
