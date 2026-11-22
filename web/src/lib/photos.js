@@ -22,16 +22,23 @@ function wikiPick(pages, name) {
   return ok.find((pg) => key(pg.title).length >= 3 && key(name).includes(key(pg.title))) || ok[0] || null;
 }
 
+// type name -> page found (or null for none): each type is asked once per page load
+const wikiCache = new Map();
+
 export async function wikiTypePhoto(names, typical) {
     for (const name of [...new Set(names.map((n) => (n || '').trim()).filter(Boolean))]) {
         try {
-            const url = 'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=5' +
-                '&prop=pageimages|description&piprop=thumbnail&pithumbsize=400&format=json&origin=*&gsrsearch=' +
-                encodeURIComponent(`${name} aircraft`);
-            const res = await fetch(url);
-            if (!res.ok) return null;
-            const pages = Object.values((await res.json()).query?.pages || {}).sort((a, b) => a.index - b.index);
-            const page = wikiPick(pages, name);
+            let page = wikiCache.get(name);
+            if (page === undefined) {
+                const url = 'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=5' +
+                    '&prop=pageimages|description&piprop=thumbnail&pithumbsize=400&format=json&origin=*&gsrsearch=' +
+                    encodeURIComponent(`${name} aircraft`);
+                const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+                if (!res.ok) return null;
+                const pages = Object.values((await res.json()).query?.pages || {}).sort((a, b) => a.index - b.index);
+                page = wikiPick(pages, name);
+                wikiCache.set(name, page);
+            }
             if (page) {
                 return {
                     src: page.thumbnail.source,
@@ -41,7 +48,7 @@ export async function wikiTypePhoto(names, typical) {
                 };
             }
         } catch (e) {
-            return null; // offline or blocked: the outline is shown
+            return null; // offline, blocked or too slow: the outline is shown
         }
     }
     return null;

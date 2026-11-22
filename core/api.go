@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -43,7 +42,8 @@ func (s *APIServer) getTimezone(c *gin.Context) string {
 	}
 
 	_, err := time.LoadLocation(tz)
-	if err != nil {
+	// "Local" is Go's name for the container's own zone; PostgreSQL doesn't know it
+	if err != nil || tz == "Local" {
 		return "UTC"
 	}
 
@@ -1259,7 +1259,8 @@ func (s *APIServer) getChartFlightsOverTime(c *gin.Context, period string) {
 		}
 		defer tx.Rollback(ctx)
 
-		_, err = tx.Exec(ctx, fmt.Sprintf("SET LOCAL TIME ZONE '%s'", tz))
+		// same as SET LOCAL TIME ZONE, with the zone passed as a parameter
+		_, err = tx.Exec(ctx, "SELECT set_config('TimeZone', $1, true)", tz)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -1425,7 +1426,8 @@ func (s *APIServer) getChartAircraftOverTime(c *gin.Context, period string) {
 		}
 		defer tx.Rollback(ctx)
 
-		_, err = tx.Exec(ctx, fmt.Sprintf("SET LOCAL TIME ZONE '%s'", tz))
+		// same as SET LOCAL TIME ZONE, with the zone passed as a parameter
+		_, err = tx.Exec(ctx, "SELECT set_config('TimeZone', $1, true)", tz)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
