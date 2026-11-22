@@ -71,6 +71,12 @@ func main() {
 	}
 
 	url := GetConnectionUrl()
+	if p := poolMaxParam(); p != "" {
+		url += "?" + p
+	}
+
+	// a receiver's SkyStats (Radar Nodes) makes its own database on first start
+	ensureDatabase()
 
 	log.Info().Msg("Connecting to Postgres database")
 

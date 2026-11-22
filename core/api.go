@@ -132,6 +132,9 @@ func (s *APIServer) registerRoutes(r *gin.Engine) {
 			stats.GET("/seen/aircraft", s.getAircraftSeenMetrics)
 		}
 
+		// Radar Nodes: the receivers offered in the Activity menu (k4nza-receivers.go)
+		api.GET("/k4nza/receivers", s.getReceivers)
+
 		settings := api.Group("/settings")
 		{
 			settings.GET("", s.getSettings)

@@ -9,6 +9,8 @@
   import Footer from './components/Footer.svelte';
   import Settings from './components/Settings.svelte';
   import { feederBase, backToFeeder, feederInfo } from './lib/feeder.js';
+  import { receiverId, receivers, loadReceivers, receiverUrl, receiverName } from './lib/receiver.js';
+  import { onMount } from 'svelte';
 
   // ?q=... (a search, e.g. from the feeder home page) or ?group=Mil|Gov|Pol|Civ
   // (a whole interesting group) opens the Search tab
@@ -54,6 +56,25 @@
   // "All interesting aircraft" on the Activity tab
   window.addEventListener('skystats-open-tab', (e) => setActiveTab(e.detail));
 
+  // Radar Nodes: the Activity tab becomes a menu of receivers once the feeder has nodes
+  let receiverMenuOpen = false;
+  onMount(() => {
+      loadReceivers();
+      const close = (e) => {
+          if (!e.target.closest || !e.target.closest('.dl-recv')) receiverMenuOpen = false;
+      };
+      const esc = (e) => { if (e.key === 'Escape') receiverMenuOpen = false; };
+      document.addEventListener('click', close);
+      document.addEventListener('keydown', esc);
+      return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', esc); };
+  });
+  function pickReceiver(id) {
+      receiverMenuOpen = false;
+      if (id === receiverId) { setActiveTab('activity'); return; }
+      window.location.assign(receiverUrl(id));
+  }
+  $: receiverLabel = receiverId === 'all' ? '' : receiverName($receivers, receiverId);
+
   // "k4nza build -34", as in the feeder's top bar: the K4NZA release number only
   $: release = ($feederInfo.feeder_version.match(/-(\d+)\s*$/) || [])[1];
   $: tagline = 'k4nza build' + (release ? ' -' + release : '');
@@ -73,10 +94,34 @@
     <div class="dl-header-tools">
       <nav aria-label="SkyStats sections" class="dl-nav">
         {#each tabs as tab}
+          {#if tab.name === 'activity' && $receivers.length}
+            <div class="dl-recv">
+              <button type="button" class="dl-tab" aria-current={activeTab === tab.name ? 'page' : undefined}
+                aria-haspopup="menu" aria-expanded={receiverMenuOpen}
+                on:click={() => receiverMenuOpen = !receiverMenuOpen}>
+                Activity{#if receiverLabel}<span class="dl-recv-name">· {receiverLabel}</span>{/if}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+              </button>
+              {#if receiverMenuOpen}
+                <div class="dl-recv-menu" role="menu">
+                  <div class="dl-recv-head">Show activity for</div>
+                  {#each $receivers as r, i}
+                    <button type="button" role="menuitemradio" aria-checked={r.id === receiverId}
+                      class="dl-recv-item" on:click={() => pickReceiver(r.id)}>
+                      <span>{r.name}{#if r.paused}<span class="dl-recv-note"> (paused)</span>{/if}</span>
+                      {#if r.id === receiverId}<span aria-hidden="true">✓</span>{/if}
+                    </button>
+                    {#if i === 1}<div class="dl-recv-sep"></div>{/if}
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {:else}
           <button type="button" class="dl-tab" aria-current={activeTab === tab.name ? 'page' : undefined}
             on:click={() => tab.name === 'search' ? openSearch() : setActiveTab(tab.name)}>
             {#if tab.name === 'search'}<IconSearch class="h-4 w-4" />{/if}{tab.label}
           </button>
+          {/if}
         {/each}
       </nav>
       <div class="dl-header-btns">
@@ -103,6 +148,23 @@
 
 <style>
   .dl-header { background: var(--dl-surface); border-bottom: 1px solid var(--dl-line); }
+  .dl-recv { position: relative; }
+  .dl-recv-name { color: var(--dl-accent); font-weight: 700; }
+  .dl-recv-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 230px;
+    background: var(--dl-surface); border: 1px solid var(--dl-line); border-radius: 14px; padding: 6px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16); display: flex; flex-direction: column; gap: 1px;
+  }
+  .dl-recv-head { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dl-muted); font-weight: 700; padding: 6px 12px 4px; }
+  .dl-recv-item {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px;
+    border: 0; border-radius: 10px; background: transparent; color: var(--dl-ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer;
+  }
+  .dl-recv-item:hover { background: var(--dl-surface-2); }
+  .dl-recv-item[aria-checked="true"] { background: var(--dl-accent-soft); color: var(--dl-accent-ink); }
+  .dl-recv-item:focus-visible { outline: 2px solid var(--dl-accent); outline-offset: 1px; }
+  .dl-recv-note { color: var(--dl-muted); font-weight: 400; }
+  .dl-recv-sep { height: 1px; background: var(--dl-line); margin: 4px 6px; }
   .dl-header-in {
     max-width: 1180px;
     margin: 0 auto;
