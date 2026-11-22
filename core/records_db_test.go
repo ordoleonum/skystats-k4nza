@@ -31,6 +31,7 @@ func TestRecordsUseFinishedVisits(t *testing.T) {
 	add("aa0002", time.Now(), 2500, 4)           // still in view: taxiing so far, not judged yet
 	add("aa0003", finished, 0, 6)                // only ever on the ground
 	add("aa0004", time.Now().Add(-5*time.Minute), 1200, 60) // gone 5 min: may still come back
+	add("~297e16", finished, 1400, 72)          // unidentified (TIS-B): never a record
 
 	updateMeasurementStatistics(pg)
 
@@ -49,6 +50,11 @@ func TestRecordsUseFinishedVisits(t *testing.T) {
 			if count(table, hex) != 0 {
 				t.Errorf("unfinished visit %s judged into %s", hex, table)
 			}
+		}
+	}
+	for _, table := range []string{"slowest_aircraft", "lowest_aircraft", "highest_aircraft", "fastest_aircraft"} {
+		if count(table, "~297e16") != 0 {
+			t.Errorf("unidentified target on %s", table)
 		}
 	}
 	if count("slowest_aircraft", "aa0003") != 0 {

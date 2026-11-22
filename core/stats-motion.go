@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"sort"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
@@ -17,6 +18,14 @@ func updateMeasurementStatistics(pg *postgres) {
 	updateHighestAircraft(pg, aircrafts)
 	updateSlowestAircraft(pg, aircrafts)
 
+}
+
+// recordEligible: K4NZA - unidentified targets (readsb marks their address
+// with "~": TIS-B relays of radar returns, non-ICAO addresses) stay off the
+// record lists. Nothing says what they are, and their speeds aren't the
+// aircraft's own readings.
+func recordEligible(aircraft Aircraft) bool {
+	return !strings.HasPrefix(aircraft.Hex, "~")
 }
 
 func updateLowestAircraft(pg *postgres, aircrafts []Aircraft) {
@@ -45,6 +54,9 @@ func updateLowestAircraft(pg *postgres, aircrafts []Aircraft) {
 	var aircraftsToInsert []Aircraft
 
 	for _, aircraft := range aircraftToProcess {
+		if !recordEligible(aircraft) {
+			continue
+		}
 		if aircraft.AltBaro < 1 {
 			continue
 		}
@@ -132,6 +144,9 @@ func updateHighestAircraft(pg *postgres, aircrafts []Aircraft) {
 	var aircraftsToInsert []Aircraft
 
 	for _, aircraft := range aircraftToProcess {
+		if !recordEligible(aircraft) {
+			continue
+		}
 		if aircraft.AltBaro > highestAircraftFloor {
 			aircraftsToInsert = append(aircraftsToInsert, aircraft)
 		} else {
@@ -216,6 +231,9 @@ func updateSlowestAircraft(pg *postgres, aircrafts []Aircraft) {
 	var aircraftsToInsert []Aircraft
 
 	for _, aircraft := range aircraftToProcess {
+		if !recordEligible(aircraft) {
+			continue
+		}
 		if aircraft.Gs < 1 {
 			continue
 		}
@@ -311,6 +329,9 @@ func updateFastestAircraft(pg *postgres, aircrafts []Aircraft) {
 	var aircraftsToInsert []Aircraft
 
 	for _, aircraft := range aircraftToProcess {
+		if !recordEligible(aircraft) {
+			continue
+		}
 		if aircraft.Gs > fastestAircraftFloor {
 			aircraftsToInsert = append(aircraftsToInsert, aircraft)
 		} else {
