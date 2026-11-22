@@ -1,4 +1,5 @@
 <script>
+    import { stationTz } from '../lib/stationTz.js';
     import { onMount, onDestroy } from 'svelte';
     import { IconPlaneTilt, IconCalendar, IconClock } from '@tabler/icons-svelte';
     import NumberFlow from '@number-flow/svelte'
@@ -13,7 +14,7 @@
 
     async function fetchRecentData() {
         try {
-            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const tz = stationTz();
             const response = await fetch(`${endpoint}?tz=${encodeURIComponent(tz)}`);
             if (!response.ok) {
                 throw new Error(`${response.status}`);

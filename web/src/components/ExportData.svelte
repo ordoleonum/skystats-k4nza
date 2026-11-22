@@ -1,13 +1,14 @@
 <script>
     // Data export panel.
     import { onMount } from 'svelte';
+    import { stationTz, stationDate } from '../lib/stationTz.js';
     import { IconDownload, IconFileZip, IconInfoCircle } from '@tabler/icons-svelte';
 
     let summary = null;
     let loadError = '';
     let fromDate = '';
     let toDate = '';
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const tz = stationTz();
 
     async function loadSummary() {
         loadError = '';
@@ -39,15 +40,12 @@
 
     function setPreset(days) {
         if (days === 0) { fromDate = ''; toDate = ''; return; }
-        const end = new Date();
-        const start = new Date();
-        start.setDate(end.getDate() - (days - 1));
-        const fmt = (d) => d.toLocaleDateString('en-CA'); // YYYY-MM-DD
-        fromDate = fmt(start);
-        toDate = fmt(end);
+        // the station's calendar days (YYYY-MM-DD)
+        fromDate = stationDate(days - 1);
+        toDate = stationDate(0);
     }
 
-    const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—';
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString(undefined, { timeZone: tz }) : '—';
     const fmtRows = (n) => n < 0 ? '?' : n.toLocaleString();
 
     onMount(loadSummary);
@@ -87,7 +85,7 @@
 <div class="mb-6">
     <p class="text-xl font-extralight tracking-wider mb-2">Date range</p>
     <p class="text-sm text-base-content/70 mb-3">
-        Leave both empty to export everything. Dates are in your time zone ({tz}).
+        Leave both empty to export everything. Dates are in the station's time zone ({tz}).
     </p>
     <div class="flex flex-wrap items-center gap-3 mb-3">
         <label class="flex items-center gap-2">From

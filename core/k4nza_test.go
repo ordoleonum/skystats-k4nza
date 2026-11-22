@@ -212,3 +212,28 @@ func TestMatchTypeCodes(t *testing.T) {
 		t.Errorf("limit not kept: %v", got)
 	}
 }
+
+func TestGetTimezoneStationWins(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &APIServer{}
+	ask := func(query string) string {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Request = httptest.NewRequest(http.MethodGet, "/x"+query, nil)
+		return s.getTimezone(c)
+	}
+	cases := []struct{ station, query, want string }{
+		{"", "", "UTC"},
+		{"", "?tz=America/New_York", "America/New_York"},
+		{"", "?tz=Local", "UTC"},
+		{"", "?tz=Not/AZone", "UTC"},
+		{"America/Chicago", "?tz=America/New_York", "America/Chicago"},
+		{"America/Chicago", "", "America/Chicago"},
+		{"Not/AZone", "?tz=Europe/Berlin", "Europe/Berlin"},
+	}
+	for _, tc := range cases {
+		t.Setenv("STATION_TZ", tc.station)
+		if got := ask(tc.query); got != tc.want {
+			t.Errorf("STATION_TZ=%q %s: got %q, want %q", tc.station, tc.query, got, tc.want)
+		}
+	}
+}

@@ -2,6 +2,7 @@
     // Aircraft search: registration, hex code, callsign, type or operator.
     // Opens directly with ?q=... (the feeder home page links here).
     import { onMount, tick } from 'svelte';
+    import { stationTz, stationDay, fmtStationDay, fmtStationTime } from '../lib/stationTz.js';
     import { IconSearch, IconDownload, IconExternalLink, IconX, IconInfoCircle, IconPlane, IconHelicopter } from '@tabler/icons-svelte';
     import { units } from '../stores/units';
     import { formatDistanceKm, formatAltitude } from '../lib/units';
@@ -222,16 +223,10 @@
     }
 
     // ---------- formatting ----------
-    const sameDay = (a, b) => a.toDateString() === b.toDateString();
-    function fmtDay(d) {
-        const now = new Date();
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        if (sameDay(d, now)) return 'Today';
-        if (sameDay(d, yesterday)) return 'Yesterday';
-        return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
-    }
-    const fmtTime = (d) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    // days and times on the station's calendar and clock
+    const sameDay = (a, b) => stationDay(a) === stationDay(b);
+    const fmtDay = (d) => fmtStationDay(d);
+    const fmtTime = (d) => fmtStationTime(d, { hour: '2-digit', minute: '2-digit' });
     function fmtWhen(first, last) {
         const a = new Date(first), b = new Date(last);
         return `${fmtDay(a)} ${fmtTime(a)} to ${sameDay(a, b) ? '' : fmtDay(b) + ' '}${fmtTime(b)}`;
@@ -287,7 +282,7 @@
         runSearch();
     }
     const groupName = { Mil: 'Military aircraft', Gov: 'Government aircraft', Pol: 'Police aircraft', Civ: 'Civilian aircraft of interest' };
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tz = stationTz();
 
     onMount(() => {
         const params = new URLSearchParams(window.location.search);

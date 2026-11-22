@@ -34,20 +34,35 @@ func NewAPIServer(pg *postgres) *APIServer {
 	}
 }
 
-func (s *APIServer) getTimezone(c *gin.Context) string {
-
-	tz := c.Query("tz")
-	if tz == "" {
-		return "UTC"
+// K4NZA: the station's time zone (STATION_TZ, set by the feeder from its own
+// time zone setting). When it is set, every "today", day and week in SkyStats
+// starts at the station's midnight, whichever time zone the viewing device is
+// in, so SkyStats and the feeder dashboard always count the same days.
+func stationTimezone() string {
+	tz := strings.TrimSpace(os.Getenv("STATION_TZ"))
+	if !validTimezone(tz) {
+		return ""
 	}
-
-	_, err := time.LoadLocation(tz)
-	// "Local" is Go's name for the container's own zone; PostgreSQL doesn't know it
-	if err != nil || tz == "Local" {
-		return "UTC"
-	}
-
 	return tz
+}
+
+func validTimezone(tz string) bool {
+	// "Local" is Go's name for the container's own zone; PostgreSQL doesn't know it
+	if tz == "" || tz == "Local" {
+		return false
+	}
+	_, err := time.LoadLocation(tz)
+	return err == nil
+}
+
+func (s *APIServer) getTimezone(c *gin.Context) string {
+	if tz := stationTimezone(); tz != "" {
+		return tz
+	}
+	if tz := c.Query("tz"); validTimezone(tz) {
+		return tz
+	}
+	return "UTC"
 }
 
 func (s *APIServer) Start() {
@@ -1511,6 +1526,8 @@ func (s *APIServer) getConfig(c *gin.Context) {
 		"default_units":  units,
 		"station_name":   strings.TrimSpace(os.Getenv("STATION_NAME")),
 		"feeder_version": version,
+		// the zone the pages show dates and times in ("" = the device's own)
+		"time_zone": stationTimezone(),
 	})
 }
 

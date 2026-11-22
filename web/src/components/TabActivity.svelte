@@ -3,6 +3,7 @@
   // today, this week, this month or ever. One request (api/k4nza/report) fills
   // everything except the two reception charts, which keep their own data.
   import { onMount, onDestroy } from 'svelte';
+  import { stationTz } from '../lib/stationTz.js';
   import ActivityRangeByDirection from './ActivityRangeByDirection.svelte';
   import ActivitySignalVsDistance from './ActivitySignalVsDistance.svelte';
   import AboveTimeline from './AboveTimeline.svelte';
@@ -38,7 +39,8 @@
   let timer = null;
   let photos = {};
 
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  // the station's days (times in the report are already on the station's clock)
+  const tz = stationTz();
   const nf = new Intl.NumberFormat();
   const num = (n) => nf.format(Math.round(n || 0));
 

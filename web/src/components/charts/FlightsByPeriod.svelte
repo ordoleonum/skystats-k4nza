@@ -2,6 +2,7 @@
 // @ts-nocheck
     import { onMount, onDestroy } from 'svelte';
     import { themeChanged } from '../../lib/themeStore.js';
+    import { stationTz } from '../../lib/stationTz.js';
     import {
         Chart,
         BarController,
@@ -20,7 +21,7 @@
 
     /* Data setup */
 
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const timezone = stationTz();
     const endpoint = `api/stats/charts/${type}/${period}?tz=${encodeURIComponent(timezone)}`;
 
     async function fetchData() {
@@ -77,10 +78,6 @@
         primaryAlpha: 'rgba(87, 13, 248, 0.2)'
     };
 
-    const MONTH_NAMES = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-    ];
     
     
     // this is silly, but seems to be the only way to dynamically get the value of daisyui theme colours
@@ -119,13 +116,14 @@
         const date = chartData.labels[index];
         
         if (period === 'year') {
-            return `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+            return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: timezone });
         } else if (period === 'month') {
             return date.toLocaleDateString('en-US', { 
                 weekday: 'short', 
                 year: 'numeric', 
                 month: 'short', 
-                day: 'numeric' 
+                day: 'numeric',
+                timeZone: timezone
             });
         } else {
             // For day view, show hour
@@ -135,7 +133,8 @@
                 day: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit',
-                hour12: true
+                hour12: true,
+                timeZone: timezone
             });
         }
     }
@@ -146,14 +145,15 @@
         if (!date) return value;
         
         if (period === 'year') {
-            return `${MONTH_NAMES[date.getMonth()].slice(0, 3)} ${date.getFullYear()}`;
+            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: timezone });
         } else if (period === 'month') {
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: timezone });
         } else {
             // For day view, show hour
             return date.toLocaleString('en-US', { 
                 hour: 'numeric',
-                hour12: true
+                hour12: true,
+                timeZone: timezone
             });
         }
     }

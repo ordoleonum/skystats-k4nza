@@ -1,4 +1,5 @@
 <script>
+    import { stationTz } from '../lib/stationTz.js';
     import MotionStats from './MotionStats.svelte';
     import { units } from '../stores/units';
     import { formatAltitude } from '../lib/units';
@@ -17,7 +18,7 @@
         { 
             header: 'First Seen', 
             field: 'first_seen',
-            formatter: (value) => value ? new Date(value).toLocaleString() : '-'
+            formatter: (value) => value ? new Date(value).toLocaleString(undefined, { timeZone: stationTz() }) : '-'
         }
     ];
 </script>

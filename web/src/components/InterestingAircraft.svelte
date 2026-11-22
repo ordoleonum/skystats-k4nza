@@ -1,5 +1,6 @@
 <script>
     import { onMount } from 'svelte'
+    import { fmtStationDay, fmtStationTime } from '../lib/stationTz.js';
     import { settings, refreshInterestingData } from '../stores/settings';
     import { searchFor, searchGroup } from '../lib/search';
 
@@ -24,12 +25,10 @@
     // "Today 7:24 PM", "Yesterday 6:39 PM", "Nov 16 2:25 PM" - as in Search
     function fmtSeen(v) {
         if (!v) return '–';
-        const d = new Date(v), now = new Date(), y = new Date(now);
-        y.setDate(now.getDate() - 1);
-        const day = d.toDateString() === now.toDateString() ? 'Today'
-            : d.toDateString() === y.toDateString() ? 'Yesterday'
-            : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
-        return `${day} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+        // on the station's calendar and clock
+        const d = new Date(v);
+        if (isNaN(d)) return '–';
+        return `${fmtStationDay(d)} ${fmtStationTime(d)}`;
     }
 
     async function fetchData() {
