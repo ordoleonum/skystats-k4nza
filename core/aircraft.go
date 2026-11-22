@@ -130,6 +130,7 @@ func (pg *postgres) sweepAircraftCache(now time.Time) {
 		return
 	}
 	lastCacheSweep = now
+	pg.sweepSpeedSamples(now)
 	for hex, entry := range pg.recentAircraftCache {
 		if now.After(entry.expiresAt) {
 			delete(pg.recentAircraftCache, hex)
@@ -140,6 +141,9 @@ func (pg *postgres) sweepAircraftCache(now time.Time) {
 func (pg *postgres) updateDatabase(nowEpoch float64, aircrafts []Aircraft) {
 
 	pg.sweepAircraftCache(time.Now())
+
+	// K4NZA: only speeds that check out are recorded (speed_check.go)
+	pg.confirmSpeeds(nowEpoch, aircrafts)
 
 	if len(aircrafts) == 0 {
 		// nothing in range: no database work needed this pass
@@ -449,6 +453,7 @@ func updateExistingAircrafts(pg *postgres, nowEpoch float64, aircrafts []Aircraf
 		}
 
 		// Update ground speed, indicated air speed, and true air speed if higher than already stored
+		// (these are confirmed speeds, 0 when this poll's reading didn't check out)
 		if existingAircraft.Gs < aircraft.Gs {
 			existingAircraft.Gs = aircraft.Gs
 			significantChange = true

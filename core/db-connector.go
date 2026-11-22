@@ -21,6 +21,7 @@ type aircraftCacheEntry struct {
 type postgres struct {
 	db                 *pgxpool.Pool
 	recentAircraftCache map[string]*aircraftCacheEntry
+	speedSamples        map[string]speedSample // K4NZA: last poll's speed readings, see speed_check.go
 }
 
 var (

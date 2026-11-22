@@ -259,8 +259,8 @@ func updateSlowestAircraft(pg *postgres, aircrafts []Aircraft) {
 			aircraft.FirstSeen,
 			aircraft.LastSeen,
 			aircraft.Gs,
-			aircraft.Tas,
-			aircraft.Ias)
+			aircraft.Ias,
+			aircraft.Tas)
 	}
 
 	br := pg.db.SendBatch(context.Background(), batch)
@@ -346,8 +346,8 @@ func updateFastestAircraft(pg *postgres, aircrafts []Aircraft) {
 			aircraft.FirstSeen,
 			aircraft.LastSeen,
 			aircraft.Gs,
-			aircraft.Tas,
-			aircraft.Ias)
+			aircraft.Ias,
+			aircraft.Tas)
 	}
 
 	br := pg.db.SendBatch(context.Background(), batch)
