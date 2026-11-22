@@ -6,8 +6,6 @@
   import ActivityRangeByDirection from './ActivityRangeByDirection.svelte';
   import ActivitySignalVsDistance from './ActivitySignalVsDistance.svelte';
   import AboveTimeline from './AboveTimeline.svelte';
-  import ActivityByReceiver from './ActivityByReceiver.svelte';
-  import { receiverId, receivers } from '../lib/receiver.js';
   import { units } from '../stores/units';
   import { fromNm, distanceLabel } from '../lib/units';
   import { replayUrl } from '../lib/feeder.js';
@@ -247,16 +245,6 @@
       </div>
     {/each}
   </div>
-
-  {#if receiverId === 'home'}
-    <p class="dl-note rep-recv-note">This station's own radio only, without the nodes. Its separate history starts
-      when the first node was added; before that, Full network was this station alone.</p>
-  {:else if receiverId !== 'all' && $receivers.some((r) => r.id === receiverId && r.paused)}
-    <p class="dl-note rep-recv-note">This node is paused. Its history is kept.</p>
-  {/if}
-  {#if receiverId === 'all' && $receivers.length}
-    <ActivityByReceiver {period} total={data ? data.flights : 0} />
-  {/if}
 
   <section class="dl-card">
     <div class="dl-card-head">
