@@ -398,7 +398,10 @@ const visitFinishedAfter = 660
 
 func getAircraftsForMeasurementStatistics(pg *postgres) []Aircraft {
 
-	query := `SELECT id, hex, flight, r, t, first_seen, last_seen, alt_baro, alt_geom, gs, ias, tas, 
+	// K4NZA: every nullable column is COALESCEd - one row that can't be read
+	// used to drop the whole batch, and the same oldest batch came up every run
+	query := `SELECT id, hex, COALESCE(flight, ''), COALESCE(r, ''), COALESCE(t, ''), first_seen, last_seen,
+				COALESCE(alt_baro, 0), COALESCE(alt_geom, 0), COALESCE(gs, 0), COALESCE(ias, 0), COALESCE(tas, 0),
 				lowest_aircraft_processed, highest_aircraft_processed, fastest_aircraft_processed, slowest_aircraft_processed
 				FROM aircraft_data
 				WHERE (lowest_aircraft_processed = false OR

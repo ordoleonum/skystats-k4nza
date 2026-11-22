@@ -68,3 +68,29 @@ func TestRecordsUseFinishedVisits(t *testing.T) {
 		t.Errorf("unfinished visit marked processed - it would never be judged again")
 	}
 }
+
+// A row with empty (NULL) columns must not stop the record job: it used to
+// drop the whole batch, and the same batch came up again every run.
+func TestRecordsSurviveNullColumns(t *testing.T) {
+	pg := testPG(t)
+	ctx := context.Background()
+	finished := time.Now().Add(-30 * time.Minute)
+	first := finished.Add(-5 * time.Minute)
+	if _, err := pg.db.Exec(ctx, `
+		INSERT INTO aircraft_data (hex, first_seen, first_seen_epoch, last_seen, last_seen_epoch, alt_baro, gs)
+		VALUES ('ab0001', $1, $2, $3, $4, 2000, 90)`,
+		first, first.Unix(), finished, finished.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	updateMeasurementStatistics(pg)
+	var done bool
+	if err := pg.db.QueryRow(ctx, `SELECT slowest_aircraft_processed FROM aircraft_data WHERE hex = 'ab0001'`).Scan(&done); err != nil {
+		t.Fatal(err)
+	}
+	if !done {
+		t.Fatalf("row with NULL columns was never processed")
+	}
+	if len(unprocessedInteresting(pg)) == 0 {
+		t.Fatalf("interesting job could not read a row with NULL columns")
+	}
+}

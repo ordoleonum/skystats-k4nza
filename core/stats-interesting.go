@@ -207,22 +207,23 @@ func unprocessedInteresting(pg *postgres) []Aircraft {
 	query := `
 		SELECT id,
 				hex,
-				flight,
-				r,
-				t,
-				alt_baro,
-				alt_geom,
-				gs,
-				ias,
-				tas,
-				track,
-				baro_rate,
-				lat,
-				lon,
-				alert,
-				db_flags,
+				-- K4NZA: nullable columns COALESCEd so one odd row can't stall the job
+				COALESCE(flight, ''),
+				COALESCE(r, ''),
+				COALESCE(t, ''),
+				COALESCE(alt_baro, 0),
+				COALESCE(alt_geom, 0),
+				COALESCE(gs, 0),
+				COALESCE(ias, 0),
+				COALESCE(tas, 0),
+				COALESCE(track, 0),
+				COALESCE(baro_rate, 0),
+				COALESCE(lat, 0),
+				COALESCE(lon, 0),
+				COALESCE(alert, 0),
+				COALESCE(db_flags, 0),
 				first_seen,
-				first_seen_epoch
+				COALESCE(first_seen_epoch, 0)
 		FROM aircraft_data
 		WHERE
 			hex != '' AND
