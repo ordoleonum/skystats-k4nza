@@ -52,6 +52,12 @@ const militaryHexSQL = `
 // farthestSince: the farthest aircraft heard since from, using the first-heard
 // distance or the last position, whichever is farther.
 func (s *APIServer) farthestSince(ctx context.Context, from time.Time, tz string) (homeAircraft, bool) {
+	return s.farthestInSector(ctx, from, tz, -1)
+}
+
+// farthestInSector: the farthest aircraft since from in one 10-degree range
+// sector (as on the range chart), or in any direction when sector < 0.
+func (s *APIServer) farthestInSector(ctx context.Context, from time.Time, tz string, sector int) (homeAircraft, bool) {
 	far := homeAircraft{}
 	var nm, dir float64
 	var when string
@@ -72,8 +78,10 @@ func (s *APIServer) farthestSince(ctx context.Context, from time.Time, tz string
 			SELECT hex, cs, t, first_seen, nm2, dir2 FROM a WHERE nm2 > 0 AND dir2 IS NOT NULL
 		)
 		SELECT hex, cs, t, nm, dir, TO_CHAR(first_seen AT TIME ZONE $6, 'YYYY-MM-DD"T"HH24:MI')
-		FROM p WHERE nm < $5 ORDER BY nm DESC LIMIT 1`,
-		from, getLat(), getLon(), kmPerNm, maxPlausibleNm(), tz).Scan(&far.Hex, &far.Callsign, &far.Type, &nm, &dir, &when)
+		FROM p WHERE nm < $5
+		  AND ($7::int < 0 OR floor(mod((dir + 360)::numeric, 360) / 10)::int = $7::int)
+		ORDER BY nm DESC LIMIT 1`,
+		from, getLat(), getLon(), kmPerNm, maxPlausibleNm(), tz, sector).Scan(&far.Hex, &far.Callsign, &far.Type, &nm, &dir, &when)
 	if err != nil {
 		return far, false
 	}

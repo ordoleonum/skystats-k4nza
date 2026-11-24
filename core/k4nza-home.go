@@ -153,6 +153,9 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 		out["rarest"] = rare
 	}
 
+	// today's firsts: records, new types, long-lost returns, round numbers
+	out["firsts"] = s.homeFirsts(ctx, day.start, tz, rare.Type)
+
 	c.JSON(http.StatusOK, out)
 }
 
