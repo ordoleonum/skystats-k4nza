@@ -97,7 +97,8 @@
 
   onMount(() => {
     load();
-    timer = setInterval(() => { if (active && !document.hidden) load(); }, 60000);
+    // same pace as the feeder dashboard (20 s) so the two counts move together
+    timer = setInterval(() => { if (active && !document.hidden) load(); }, 20000);
   });
   onDestroy(() => clearInterval(timer));
 
