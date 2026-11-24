@@ -57,16 +57,20 @@
         return m ? `rgba(${m[0]}, ${m[1]}, ${m[2]}, ${a})` : rgb;
     }
 
-    async function load() {
-        loading = true;
+    // quiet: the once-a-minute refresh, which keeps the chart on screen (and
+    // the last numbers if SkyStats doesn't answer) instead of a loading spinner
+    async function load(quiet = false) {
+        if (!quiet) loading = true;
         error = null;
         try {
             const res = await fetch(`api/stats/reception/range/${selected}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             data = await res.json();
         } catch (e) {
-            error = e.message || 'Failed to load data';
-            data = null;
+            if (!quiet) {
+                error = e.message || 'Failed to load data';
+                data = null;
+            }
         } finally {
             loading = false;
         }
@@ -162,10 +166,14 @@
 
     onMount(async () => {
         unsubscribe = themeChanged.subscribe(() => setTimeout(draw, 50));
+        // every minute, like the notable events on the feeder's home page
+        refreshTimer = setInterval(() => { if (!document.hidden) load(true); }, 60000);
         await load();
     });
 
+    let refreshTimer = null;
     onDestroy(() => {
+        clearInterval(refreshTimer);
         if (chart) chart.destroy();
         if (unsubscribe) unsubscribe();
     });
