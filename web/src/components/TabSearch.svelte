@@ -249,6 +249,10 @@
     const adsbxLink = (d) => `https://globe.adsbexchange.com/?icao=${encodeURIComponent(d.hex.toLowerCase())}`;
     const groupBadge = { Mil: 'Military', Gov: 'Government', Pol: 'Police', Civ: 'Civilian' };
     const FEEDER_MILITARY = 'Military (feeder database)';
+    // plane-alert-db category then its tags, blanks and repeats dropped
+    $: pa = !detail?.interesting ? [] : [...new Set(
+        [detail.interesting.category === FEEDER_MILITARY ? '' : detail.interesting.category, ...(detail.interesting.tags || [])]
+            .map((s) => (s || '').trim()).filter(Boolean))];
     // no photo: a plane or helicopter outline with the type, instead of an empty box
     const HELI = /^(H\d|EC\d|AS\d{2}|A1[0-9]{2}|B06|B4\d\d|B505|R22|R44|R66|S76|S92|UH|AH|CH|MH|EN48|BK17|MI8|NH90)/;
     const isHelicopter = (d) => HELI.test((d.type || '').toUpperCase()) || /helicopter|copter/i.test((d.model || '') + ' ' + (d.manufacturer || ''));
@@ -460,6 +464,12 @@
                         · hex <span class="font-mono">{detail.hex.toUpperCase()}</span>
                         {#if detail.owner_country}· registered in {detail.owner_country}{/if}
                     </p>
+                    {#if pa.length}
+                        <!-- plane-alert-db category and tags, as on the live map -->
+                        <div class="flex flex-wrap gap-1 mt-2" title="From plane-alert-db">
+                            {#each pa as tag}<span class="badge badge-ghost badge-sm">{tag}</span>{/each}
+                        </div>
+                    {/if}
                     <div class="flex flex-wrap gap-3 mt-2 text-sm">
                         <a class="link link-primary inline-flex items-center gap-1" href={adsbxLink(detail)} target="_blank" rel="noopener noreferrer">
                             <IconExternalLink class="w-4 h-4" /> View on ADSBExchange
