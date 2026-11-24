@@ -135,9 +135,17 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 	_ = s.pg.db.QueryRow(ctx, `SELECT COUNT(*) FROM (`+militaryHexSQL+`) m`, day.start).Scan(&milCount)
 	out["military_today"] = milCount
 
-	// rarest type today: of the types heard today, the one with the fewest different aircraft ever
+	// rarest type today: of the types heard today, the one with the fewest
+	// different aircraft ever. Counted from the summary table (indexed by type,
+	// never trimmed) plus the flights not summarised yet: counting the whole
+	// flight table once per type took about a second on a Pi after two weeks,
+	// and grew with every day of history.
 	rare := homeAircraft{}
 	var ever int64
+	w, werr := rollupWatermark(ctx, s.pg.db)
+	if werr != nil {
+		w = time.Unix(0, 0).UTC()
+	}
 	if err := s.pg.db.QueryRow(ctx, `
 		WITH today AS (
 			SELECT DISTINCT ON (t) t, hex, COALESCE(TRIM(flight), '') AS cs
@@ -145,16 +153,20 @@ func (s *APIServer) k4nzaHome(c *gin.Context) {
 			WHERE first_seen >= DATE_TRUNC('day', NOW(), $1) AND t IS NOT NULL AND t <> ''
 			ORDER BY t, first_seen DESC
 		)
-		SELECT today.t, today.hex, today.cs, (SELECT COUNT(DISTINCT a.hex) FROM aircraft_data a WHERE a.t = today.t) AS n
+		SELECT today.t, today.hex, today.cs,
+		       (SELECT COUNT(*) FROM k4nza_aircraft_seen s WHERE s.t = today.t)
+		       + (SELECT COUNT(DISTINCT a.hex) FROM aircraft_data a
+		          WHERE a.t = today.t AND a.first_seen >= $2
+		            AND NOT EXISTS (SELECT 1 FROM k4nza_aircraft_seen s WHERE s.hex = a.hex)) AS n
 		FROM today
-		ORDER BY n ASC, today.t LIMIT 1`, tz).Scan(&rare.Type, &rare.Hex, &rare.Callsign, &ever); err == nil {
+		ORDER BY n ASC, today.t LIMIT 1`, tz, w).Scan(&rare.Type, &rare.Hex, &rare.Callsign, &ever); err == nil {
 		rare.Count = &ever
 		s.homeDetails(ctx, &rare)
 		out["rarest"] = rare
 	}
 
-	// today's firsts: records, new types, long-lost returns, round numbers
-	out["firsts"] = s.homeFirsts(ctx, day.start, tz, rare.Type)
+	// today's notable events, as logged by the once-a-minute job
+	out["firsts"] = s.todayEvents(ctx, rare.Type)
 
 	c.JSON(http.StatusOK, out)
 }
