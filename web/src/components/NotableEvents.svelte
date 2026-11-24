@@ -76,9 +76,9 @@
   const KINDS = {
     range: ['Record', 'rec', 'record', 'records'],
     busiest: ['Record', 'rec', 'record', 'records'],
-    type: ['First', 'new', 'new type', 'new types'],
-    airline: ['First', 'new', 'new airline', 'new airlines'],
-    country: ['First', 'new', 'new country', 'new countries'],
+    type: ['First type', 'new', 'new type', 'new types'],
+    airline: ['First airline', 'new', 'new airline', 'new airlines'],
+    country: ['First country', 'new', 'new country', 'new countries'],
     milestone: ['Milestone', 'mile', 'milestone', 'milestones'],
   };
   const nf = new Intl.NumberFormat();
@@ -247,7 +247,7 @@
   .ne-chev-open { transform: translateY(2px) rotate(-135deg); }
   .ne-chev-sm { width: 6px; height: 6px; border-color: currentColor; display: inline-block; margin-left: 6px; }
   .ne-list { list-style: none; margin: 0 0 10px; padding: 0; }
-  .ne-row { width: 100%; display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  .ne-row { width: 100%; display: grid; grid-template-columns: 116px minmax(0, 1fr) auto; gap: 12px; align-items: center;
     padding: 9px 0; border: 0; border-top: 1px solid var(--dl-line-2); background: none; color: inherit; text-align: left;
     font: inherit; cursor: default; }
   .ne-list > li:first-child .ne-row { border-top: 0; padding-top: 2px; }
@@ -263,7 +263,7 @@
   .ne-what { font-weight: 600; line-height: 1.3; }
   .ne-sub { font-size: 13px; color: var(--dl-muted); line-height: 1.3; margin-top: 2px; }
   .ne-when { font-size: 13px; color: var(--dl-muted); white-space: nowrap; }
-  .ne-more { padding: 0 0 6px 104px; }
+  .ne-more { padding: 0 0 6px 128px; }
   .ne-more-btn { border: 0; background: none; padding: 2px 0; color: rgb(var(--dl-accent-rgb)); font: inherit; font-size: 13px;
     font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; }
   .ne-more-btn:hover { text-decoration: underline; }
