@@ -190,7 +190,7 @@
 <section class="dl-card rc">
     <div class="dl-card-head">
         <h2 class="dl-h2">Signal vs distance</h2>
-        <span class="dl-note">{note ? note + ' · ' : ''}{data?.points ? data.points.length.toLocaleString() + (data.mode === 'first_heard' ? ' aircraft' : ' closest passes') : ''}</span>
+        <span class="dl-note">{note ? note + ' · ' : ''}{data?.points ? (data.total ?? data.points.length).toLocaleString() + (data.mode === 'first_heard' ? ' aircraft' : ' closest passes') : ''}</span>
     </div>
     <div class="flex gap-4 dl-note flex-wrap">
         <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full bg-primary"></span>{data?.mode === 'first_heard' ? 'One aircraft (when first heard)' : 'One aircraft (at its closest)'}</span>

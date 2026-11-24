@@ -51,15 +51,19 @@ var (
 )
 
 // receptionSince turns a period into the start time of the data shown.
+// K4NZA: the same days as the Activity report and the feeder dashboard -
+// "day" is since the station's midnight, "week" the last 7 days and "month"
+// the last 30, each starting at the station's midnight (not a rolling 24 h).
 func receptionSince(interval string) time.Time {
-	now := time.Now()
-	switch interval {
-	case "1 day":
-		return now.Add(-24 * time.Hour)
-	case "7 days":
-		return now.AddDate(0, 0, -7)
-	case "1 month":
-		return now.AddDate(0, -1, 0)
+	loc := time.Local
+	if tz := stationTimezone(); tz != "" {
+		if l, err := time.LoadLocation(tz); err == nil {
+			loc = l
+		}
+	}
+	key := map[string]string{"1 day": "today", "7 days": "week", "1 month": "month"}[interval]
+	if p, ok := reportPeriodFor(key, time.Now(), loc); ok {
+		return p.start
 	}
 	return time.Time{}
 }
@@ -243,6 +247,8 @@ func (s *APIServer) getReceptionSignal(c *gin.Context) {
 		"points": points,
 		"median": median,
 		"mode":   mode,
+		// every usable reading in the period (points is a sample of at most signalSamplePoints)
+		"total": total,
 		// closest-approach readings in this period, and how many the chart waits for
 		"closest_count":  closestCount,
 		"closest_needed": signalMinClosest,

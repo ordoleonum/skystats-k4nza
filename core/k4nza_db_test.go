@@ -363,9 +363,11 @@ func TestSignalChartUsesClosestApproach(t *testing.T) {
 		Points [][2]float64 `json:"points"`
 		Mode   string       `json:"mode"`
 	}
+	// "day" starts at the station's midnight, so the test visits are just now
+	recent := time.Now().Add(-time.Second)
 	// older visits: only the first-heard signal
 	for i := 0; i < 10; i++ {
-		insertVisit(t, pg, testVisit{hex: "c0000" + string(rune('0'+i)), first: time.Now().Add(-time.Hour), rDstNm: 100, lastKm: 150})
+		insertVisit(t, pg, testVisit{hex: "c0000" + string(rune('0'+i)), first: recent, rDstNm: 100, lastKm: 150})
 	}
 	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET rssi = -30`); err != nil {
 		t.Fatal(err)
@@ -377,7 +379,7 @@ func TestSignalChartUsesClosestApproach(t *testing.T) {
 	// enough closest-approach readings: those are used
 	for i := 0; i < signalMinClosest; i++ {
 		km := 10.0 + float64(i)*5
-		insertVisit(t, pg, testVisit{hex: fmt.Sprintf("d%05d", i), first: time.Now().Add(-time.Hour), rDstNm: 120, lastKm: 200, minKm: &km})
+		insertVisit(t, pg, testVisit{hex: fmt.Sprintf("d%05d", i), first: recent, rDstNm: 120, lastKm: 200, minKm: &km})
 	}
 	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET rssi = -45, rssi_at_min = -5 - min_distance / 10 WHERE hex LIKE 'd%'`); err != nil {
 		t.Fatal(err)
@@ -390,6 +392,18 @@ func TestSignalChartUsesClosestApproach(t *testing.T) {
 		if p[1] > -5 || p[1] < -35 { // first-heard readings are -45
 			t.Errorf("point %v is not a closest-approach reading", p)
 		}
+	}
+	// a pass from before the station's midnight is not part of "day"
+	now := time.Now()
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	km := 20.0
+	insertVisit(t, pg, testVisit{hex: "e00001", first: midnight.Add(-time.Minute), rDstNm: 120, lastKm: 200, minKm: &km})
+	if _, err := pg.db.Exec(ctx, `UPDATE aircraft_data SET rssi_at_min = -10 WHERE hex = 'e00001'`); err != nil {
+		t.Fatal(err)
+	}
+	getJSON(t, r, "/api/stats/reception/signal/day", &res)
+	if len(res.Points) != signalMinClosest {
+		t.Errorf("yesterday's pass counted in today: %d points, want %d", len(res.Points), signalMinClosest)
 	}
 }
 
