@@ -57,12 +57,13 @@ func testPG(t *testing.T) *postgres {
 	ctx := context.Background()
 	if _, err := testDB.db.Exec(ctx, `
 		TRUNCATE aircraft_data, k4nza_aircraft_seen, k4nza_callsign_seen, k4nza_range_daily,
-		         route_data, registration_data, interesting_aircraft RESTART IDENTITY;
+		         k4nza_notable_events, route_data, registration_data, interesting_aircraft RESTART IDENTITY;
 		DELETE FROM cached_stats WHERE stat_key = 'k4nza_rollup_day'`); err != nil {
 		t.Fatalf("clean test database: %v", err)
 	}
 	testDB.recentAircraftCache = map[string]*aircraftCacheEntry{}
 	totalsExpires = time.Time{}
+	soonNow = nil
 	os.Unsetenv("RETENTION_DAYS")
 	return testDB
 }

@@ -49,6 +49,7 @@ func TestK4nzaHomeFirsts(t *testing.T) {
 	insertVisit(t, pg, testVisit{hex: "f00001", t: "B738", first: daysAgo(30), rDstNm: 50, rDir: 92})
 	insertVisit(t, pg, testVisit{hex: "f00004", t: "B738", first: daysAgo(30), rDstNm: 100, rDir: 182})
 	insertVisit(t, pg, testVisit{hex: "f00006", t: "B738", first: daysAgo(30), rDstNm: 10, rDir: 272})
+	insertVisit(t, pg, testVisit{hex: "f00007", t: "B738", first: daysAgo(30), rDstNm: 100, rDir: 2})
 	runRollup(pg)
 	if _, err := pg.db.Exec(ctx, `DELETE FROM aircraft_data WHERE first_seen < NOW() - INTERVAL '2 days'`); err != nil {
 		t.Fatal(err)
@@ -60,6 +61,8 @@ func TestK4nzaHomeFirsts(t *testing.T) {
 	insertVisit(t, pg, testVisit{hex: "f00004", t: "B738", first: recent, rDstNm: 40, rDir: 182})  // back too, no record
 	insertVisit(t, pg, testVisit{hex: "f00002", t: "A35K", first: recent, rDstNm: 30, rDir: 272})  // new type (the rarest highlight), record to the west
 	insertVisit(t, pg, testVisit{hex: "f00005", t: "C17", first: recent, rDstNm: 20, rDir: 272})   // new type
+	insertVisit(t, pg, testVisit{hex: "f00008", t: "B738", first: recent, rDstNm: 100.5, rDir: 2})  // only 0.5 nm farther: not a record
+	recordNotableEvents(pg) // the once-a-minute job
 
 	var res firstsResult
 	if code := getJSON(t, r, "/api/k4nza/home?tz=UTC", &res); code != 200 {
@@ -107,6 +110,55 @@ func TestK4nzaHomeFirsts(t *testing.T) {
 	if fmt.Sprint(backs) != "[f00001 f00004]" {
 		t.Errorf("returns %v, want f00001 and f00004 (each its own line)", backs)
 	}
+
+	// once logged, an event stays for the day even when its flight is gone;
+	// a record beaten again later the same day is replaced by the farther one
+	if _, err := pg.db.Exec(ctx, `DELETE FROM aircraft_data WHERE hex = 'f00004'`); err != nil {
+		t.Fatal(err)
+	}
+	insertVisit(t, pg, testVisit{hex: "f00009", t: "B738", first: recent, rDstNm: 90, rDir: 92})
+	recordNotableEvents(pg)
+	res = firstsResult{}
+	getJSON(t, r, "/api/k4nza/home?tz=UTC", &res)
+	backs, records = nil, map[string]string{}
+	for _, f := range res.Firsts {
+		switch f.Kind {
+		case "back":
+			backs = append(backs, f.Aircraft.Hex)
+		case "range":
+			records[f.Dir] = fmt.Sprintf("%s %g %g", f.Aircraft.Hex, f.Nm, f.OldNm)
+		}
+	}
+	if fmt.Sprint(backs) != "[f00001 f00004]" {
+		t.Errorf("returns after f00004's flight was removed: %v, want it still listed", backs)
+	}
+	if records["E"] != "f00009 90 50" {
+		t.Errorf("east record %q, want the farther f00009 90 (was 50)", records["E"])
+	}
+
+	// the log for the Records tab: every event, the rarest type's included
+	var feed struct {
+		Days []struct {
+			Date   string `json:"date"`
+			Events []struct {
+				Kind string `json:"kind"`
+			} `json:"events"`
+		} `json:"days"`
+		More bool `json:"more"`
+	}
+	if code := getJSON(t, r, "/api/k4nza/events", &feed); code != 200 {
+		t.Fatalf("events: HTTP %d", code)
+	}
+	if len(feed.Days) != 1 || feed.Days[0].Date != now.Format("2006-01-02") || feed.More {
+		t.Fatalf("events log %+v, want today only", feed)
+	}
+	kinds = nil
+	for _, e := range feed.Days[0].Events {
+		kinds = append(kinds, e.Kind)
+	}
+	if fmt.Sprint(kinds) != "[range range type type back back]" {
+		t.Errorf("logged events %v, want two records, A35K and C17, two returns", kinds)
+	}
 }
 
 func TestK4nzaHomeFirstsNewStation(t *testing.T) {
@@ -120,6 +172,7 @@ func TestK4nzaHomeFirstsNewStation(t *testing.T) {
 	insertVisit(t, pg, testVisit{hex: "f00001", t: "B738", first: now.Add(-48 * time.Hour), rDstNm: 50, rDir: 92})
 	insertVisit(t, pg, testVisit{hex: "f00001", t: "B738", first: now.Add(-3 * time.Minute), rDstNm: 80, rDir: 92})
 	insertVisit(t, pg, testVisit{hex: "f00002", t: "C17", first: now.Add(-3 * time.Minute), rDstNm: 20, rDir: 272})
+	recordNotableEvents(pg)
 	var res firstsResult
 	if code := getJSON(t, r, "/api/k4nza/home?tz=UTC", &res); code != 200 {
 		t.Fatalf("HTTP %d", code)

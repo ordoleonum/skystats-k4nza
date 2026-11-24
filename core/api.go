@@ -168,6 +168,8 @@ func (s *APIServer) registerRoutes(r *gin.Engine) {
 		api.GET("/k4nza/home", s.k4nzaHome)
 		// the Activity tab report (k4nza-report.go)
 		api.GET("/k4nza/report", s.k4nzaReport)
+		// the notable events log (Records tab feed)
+		api.GET("/k4nza/events", s.k4nzaEvents)
 
 		// data export
 		export := api.Group("/export")

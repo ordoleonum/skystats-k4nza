@@ -69,6 +69,16 @@ var k4nzaSchemaStatements = []string{
 	`CREATE INDEX IF NOT EXISTS idx_k4nza_seen_regkey
 		ON k4nza_aircraft_seen ((regexp_replace(upper(r), '[^A-Z0-9]', '', 'g')) text_pattern_ops)`,
 	`CREATE INDEX IF NOT EXISTS idx_k4nza_seen_type ON k4nza_aircraft_seen (t)`,
+	// notable events (records, new types, returns, milestones), one row per
+	// event per station day, logged by the once-a-minute job (k4nza-firsts.go)
+	`CREATE TABLE IF NOT EXISTS k4nza_notable_events (
+		day  DATE NOT NULL,
+		kind TEXT NOT NULL,
+		key  TEXT NOT NULL,
+		at   TIMESTAMPTZ NOT NULL,
+		data JSONB NOT NULL,
+		PRIMARY KEY (day, kind, key)
+	)`,
 	// one-time jobs that already ran (name)
 	`CREATE TABLE IF NOT EXISTS k4nza_once (
 		name TEXT PRIMARY KEY,

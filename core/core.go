@@ -150,6 +150,7 @@ func backgroundLoop(pg *postgres) {
 	updateInterestingSeenTicker := time.NewTicker(120 * time.Second)
 	maintenanceTicker := time.NewTicker(1 * time.Hour)
 	planeAlertTicker := time.NewTicker(24 * time.Hour)
+	eventsTicker := time.NewTicker(eventsInterval)
 
 	// run maintenance shortly after start-up, then hourly
 	runSafely("maintenance", func() { runMaintenance(pg) })
@@ -166,6 +167,8 @@ func backgroundLoop(pg *postgres) {
 			runSafely("update interesting", func() { updateInterestingSeen(pg) })
 		case <-maintenanceTicker.C:
 			runSafely("maintenance", func() { runMaintenance(pg) })
+		case <-eventsTicker.C:
+			runSafely("notable events", func() { recordNotableEvents(pg) })
 		case <-planeAlertTicker.C:
 			runSafely("plane-alert-db refresh", func() {
 				if err := UpsertPlaneAlertDb(pg); err != nil {
