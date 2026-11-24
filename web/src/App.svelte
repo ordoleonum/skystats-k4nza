@@ -13,7 +13,9 @@
   // ?q=... (a search, e.g. from the feeder home page) or ?group=Mil|Gov|Pol|Civ
   // (a whole interesting group) opens the Search tab
   const startParams = new URLSearchParams(window.location.search);
-  let activeTab = startParams.get('q') || startParams.get('group') ? 'search' : 'activity';
+  // ?tab=records (the feeder's "Past events" link) opens that tab
+  const TAB_PARAM = { activity: 'activity', routes: 'route-stat', interesting: 'interesting-stat', records: 'motion-stat', search: 'search' };
+  let activeTab = startParams.get('q') || startParams.get('group') ? 'search' : (TAB_PARAM[startParams.get('tab')] || 'activity');
 
   const tabs = [
     { name: 'activity', label: 'Activity', component: TabActivity },
@@ -35,6 +37,7 @@
           const url = new URL(window.location.href);
           url.searchParams.delete('q');
           url.searchParams.delete('group');
+          url.searchParams.delete('tab');
           history.replaceState(null, '', url);
       } catch (e) { /* ignore */ }
       window.scrollTo({ top: 0 });
