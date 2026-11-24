@@ -79,6 +79,9 @@ var k4nzaSchemaStatements = []string{
 		data JSONB NOT NULL,
 		PRIMARY KEY (day, kind, key)
 	)`,
+	// -40 logged "back" events (aircraft away a week or more); there were far
+	// too many of them, so they are no longer an event
+	`DELETE FROM k4nza_notable_events WHERE kind = 'back'`,
 	// one-time jobs that already ran (name)
 	`CREATE TABLE IF NOT EXISTS k4nza_once (
 		name TEXT PRIMARY KEY,

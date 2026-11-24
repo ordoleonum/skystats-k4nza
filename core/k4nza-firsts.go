@@ -1,8 +1,9 @@
 package main
 
 // Notable events: things that happened at this station for the first time
-// ever - a new range record in some direction, a type never seen before, an
-// aircraft back after a long time, a round number of different aircraft.
+// ever - a new range record in some direction, the busiest day so far, a type,
+// an airline or a country of registration never seen before, a round number
+// of different aircraft.
 //
 // A background job works them out once a minute and logs them in
 // k4nza_notable_events (one row per event per station day, kept forever).
@@ -26,6 +27,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
+	"github.com/tomcarman/skystats/data"
 )
 
 type homeFirst struct {
@@ -37,17 +39,19 @@ type homeFirst struct {
 	OldNm    float64       `json:"old_nm,omitempty"`      // range: the best before today
 	Dir      string        `json:"direction,omitempty"`   // range: 16-point compass
 	Sector   int           `json:"sector,omitempty"`      // range: 10-degree sector (0-35)
-	Days     int           `json:"days,omitempty"`        // back: days since the last visit
+	Code     string        `json:"code,omitempty"`        // airline: ICAO code (AAL)
+	Airline  string        `json:"airline,omitempty"`     // airline: its name
+	Country  string        `json:"country,omitempty"`     // country: of registration
+	Count    int64         `json:"count,omitempty"`       // busiest: different aircraft today
+	OldCount int64         `json:"old_count,omitempty"`   // busiest: the best day before
+	OldDate  string        `json:"old_date,omitempty"`    // busiest: which day that was
 	Number   int64         `json:"number,omitempty"`      // milestone / soon: the round number
 	Total    int64         `json:"total,omitempty"`       // soon: different aircraft so far
 }
 
-// Records, new types and returns need some history first: on a new station
-// nearly everything is a "first".
+// Records and firsts need some history first: on a new station nearly
+// everything is a "first" and every day the busiest.
 const firstsMinHistory = 7 * 24 * time.Hour
-
-// an aircraft counts as "back" after this long away
-const firstsBackAfter = 7 * 24 * time.Hour
 
 // the home page shows at most this many of each kind (the first, the rest folded)
 const firstsPerKind = 5
@@ -65,10 +69,10 @@ const (
 // how often the background job looks for new events
 const eventsInterval = time.Minute
 
-var kindOrder = map[string]int{"range": 0, "type": 1, "back": 2, "milestone": 3, "soon": 4}
+// records, then firsts, then round numbers
+var kindOrder = map[string]int{"range": 0, "busiest": 1, "type": 2, "airline": 3, "country": 4, "milestone": 5, "soon": 6}
 
-// sortEvents: records (farthest first), new types (newest first), returns
-// (longest away first), round numbers.
+// sortEvents: in kindOrder; records farthest first, the rest newest first.
 func sortEvents(list []homeFirst) {
 	when := func(f homeFirst) string {
 		if f.When != nil {
@@ -81,11 +85,8 @@ func sortEvents(list []homeFirst) {
 		if kindOrder[a.Kind] != kindOrder[b.Kind] {
 			return kindOrder[a.Kind] < kindOrder[b.Kind]
 		}
-		switch a.Kind {
-		case "range":
+		if a.Kind == "range" {
 			return a.Nm > b.Nm
-		case "back":
-			return a.Days > b.Days
 		}
 		return when(a) > when(b)
 	})
@@ -127,7 +128,13 @@ func (s *APIServer) computeEvents(ctx context.Context, start time.Time, tz strin
 	if oldest != nil && start.Sub(*oldest) >= firstsMinHistory {
 		out = append(out, s.firstRanges(ctx, start, cut, liveFrom, tz, perKind)...)
 		out = append(out, s.firstTypes(ctx, start, liveFrom, tz, perKind)...)
-		out = append(out, s.firstBacks(ctx, start, tz, perKind)...)
+		if known, err := s.knownBefore(ctx, start, liveFrom, tz); err == nil {
+			if f, ok := s.firstBusiest(ctx, start, known); ok {
+				out = append(out, f)
+			}
+			out = append(out, s.firstAirlines(ctx, start, tz, known, perKind)...)
+			out = append(out, s.firstCountries(ctx, start, tz, known, perKind)...)
+		}
 	}
 	if f, ok := s.firstMilestone(ctx, start, liveFrom, tz); ok {
 		out = append(out, f)
@@ -179,10 +186,12 @@ func eventKey(f homeFirst) string {
 		if f.Aircraft != nil {
 			return f.Aircraft.Type
 		}
-	case "back":
-		if f.Aircraft != nil {
-			return f.Aircraft.Hex
-		}
+	case "airline":
+		return f.Code
+	case "country":
+		return f.Country
+	case "busiest":
+		return "day"
 	case "milestone":
 		return strconv.FormatInt(f.Number, 10)
 	}
@@ -204,14 +213,18 @@ func logEvent(ctx context.Context, pg *postgres, day string, loc *time.Location,
 			at = t
 		}
 	}
-	// a record can be beaten again later the same day: keep the farthest;
-	// anything else is logged once, as first found
+	// a record can be beaten again later the same day: keep the farthest, and
+	// the busiest day keeps counting; anything else is logged once, as first found
 	_, err = pg.db.Exec(ctx, `
 		INSERT INTO k4nza_notable_events (day, kind, key, at, data)
 		VALUES ($1::date, $2, $3, $4, $5)
-		ON CONFLICT (day, kind, key) DO UPDATE SET at = EXCLUDED.at, data = EXCLUDED.data
-		WHERE k4nza_notable_events.kind = 'range'
-		  AND (EXCLUDED.data->>'distance_nm')::float8 > (k4nza_notable_events.data->>'distance_nm')::float8`,
+		ON CONFLICT (day, kind, key) DO UPDATE SET
+			at = CASE WHEN k4nza_notable_events.kind = 'busiest' THEN k4nza_notable_events.at ELSE EXCLUDED.at END,
+			data = EXCLUDED.data
+		WHERE (k4nza_notable_events.kind = 'range'
+		       AND (EXCLUDED.data->>'distance_nm')::float8 > (k4nza_notable_events.data->>'distance_nm')::float8)
+		   OR (k4nza_notable_events.kind = 'busiest'
+		       AND (EXCLUDED.data->>'count')::bigint > (k4nza_notable_events.data->>'count')::bigint)`,
 		day, f.Kind, key, at, data)
 	return err
 }
@@ -413,43 +426,159 @@ func (s *APIServer) firstTypes(ctx context.Context, start, liveFrom time.Time, t
 	return out
 }
 
-// firstBacks: today's aircraft that had been away at least a week, longest
-// away first.
-func (s *APIServer) firstBacks(ctx context.Context, start time.Time, tz string, perKind int) []homeFirst {
+// knownBefore: what the station had seen before today (airline codes,
+// countries of registration, its busiest day). It can't change during the
+// day, so it is worked out once per station day.
+type beforeToday struct {
+	key       string // today's start + time zone
+	airlines  map[string]bool
+	countries map[string]bool
+	bestDay   string
+	bestCount int64
+}
+
+var (
+	knownMu  sync.Mutex
+	knownNow *beforeToday
+)
+
+// ICAO airline callsigns: three letters, then a digit (AAL1234, DLH432)
+const airlineCallsignRE = `^[A-Z]{3}[0-9]`
+
+func (s *APIServer) knownBefore(ctx context.Context, start, liveFrom time.Time, tz string) (*beforeToday, error) {
+	key := start.UTC().Format(time.RFC3339) + " " + tz
+	knownMu.Lock()
+	defer knownMu.Unlock()
+	if knownNow != nil && knownNow.key == key {
+		return knownNow, nil
+	}
+	k := &beforeToday{key: key, airlines: map[string]bool{}, countries: map[string]bool{}}
+
+	// airlines: the summary of every callsign ever (never trimmed), plus the
+	// flights before today not summarised yet
+	rows, err := s.pg.db.Query(ctx, `
+		SELECT DISTINCT LEFT(TRIM(flight), 3) FROM k4nza_callsign_seen
+		WHERE first_seen < $1 AND TRIM(flight) ~ $3
+		UNION
+		SELECT DISTINCT LEFT(TRIM(flight), 3) FROM aircraft_data
+		WHERE first_seen >= $2 AND first_seen < $1 AND TRIM(flight) ~ $3`, start, liveFrom, airlineCallsignRE)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var code string
+		if rows.Scan(&code) == nil {
+			k.airlines[code] = true
+		}
+	}
+	rows.Close()
+
+	// countries of registration of every aircraft seen before today
+	rows, err = s.pg.db.Query(ctx, `
+		SELECT DISTINCT r.registered_owner_country_name
+		FROM registration_data r
+		WHERE r.registered_owner_country_name IS NOT NULL AND r.registered_owner_country_name <> ''
+		  AND r.mode_s IN (SELECT hex FROM k4nza_aircraft_seen WHERE first_seen < $1
+		                   UNION SELECT hex FROM aircraft_data WHERE first_seen >= $2 AND first_seen < $1)`, start, liveFrom)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var c string
+		if rows.Scan(&c) == nil {
+			k.countries[c] = true
+		}
+	}
+	rows.Close()
+
+	// the busiest station day before today (different aircraft, as the
+	// dashboard counts "since midnight"), from the flights still kept
+	var best *string
+	var n *int64
+	if err := s.pg.db.QueryRow(ctx, `
+		SELECT d::text, c FROM (
+			SELECT (first_seen AT TIME ZONE $2)::date AS d, COUNT(DISTINCT hex) AS c
+			FROM aircraft_data WHERE first_seen < $1 GROUP BY 1
+		) x ORDER BY c DESC, d LIMIT 1`, start, tz).Scan(&best, &n); err == nil && best != nil && n != nil {
+		k.bestDay, k.bestCount = *best, *n
+	}
+	knownNow = k
+	return k, nil
+}
+
+// firstBusiest: today, once it has more different aircraft than any day before.
+func (s *APIServer) firstBusiest(ctx context.Context, start time.Time, known *beforeToday) (homeFirst, bool) {
+	if known.bestCount <= 0 {
+		return homeFirst{}, false
+	}
+	var today int64
+	if err := s.pg.db.QueryRow(ctx, `SELECT COUNT(DISTINCT hex) FROM aircraft_data WHERE first_seen >= $1`, start).Scan(&today); err != nil {
+		return homeFirst{}, false
+	}
+	if today <= known.bestCount {
+		return homeFirst{}, false
+	}
+	return homeFirst{Kind: "busiest", Count: today, OldCount: known.bestCount, OldDate: known.bestDay}, true
+}
+
+// firstAirlines: airlines heard today for the first time ever (by the ICAO
+// code that starts their callsigns), newest first. Only codes in the airline
+// list count, so a stray callsign doesn't become an "airline".
+func (s *APIServer) firstAirlines(ctx context.Context, start time.Time, tz string, known *beforeToday, perKind int) []homeFirst {
 	out := []homeFirst{}
 	rows, err := s.pg.db.Query(ctx, `
-		WITH today AS (
-			SELECT hex, MIN(first_seen) AS fs
-			FROM aircraft_data WHERE first_seen >= $1 AND hex NOT LIKE '~%'
-			GROUP BY hex
-		), prev AS (
-			-- the summary row only counts when it ended before today: a rolled-up
-			-- day can already hold part of today
-			SELECT t.hex, t.fs, GREATEST(
-				(SELECT MAX(o.last_seen) FROM aircraft_data o WHERE o.hex = t.hex AND o.first_seen < $1),
-				(SELECT s.last_seen FROM k4nza_aircraft_seen s WHERE s.hex = t.hex AND s.last_seen < $1)) AS before
-			FROM today t
-		)
-		SELECT p.hex, COALESCE((SELECT TRIM(a.flight) FROM aircraft_data a WHERE a.hex = p.hex AND a.first_seen = p.fs LIMIT 1), ''),
-		       COALESCE((SELECT a.t FROM aircraft_data a WHERE a.hex = p.hex AND a.first_seen = p.fs LIMIT 1), ''),
-		       TO_CHAR(p.fs AT TIME ZONE $2, 'YYYY-MM-DD"T"HH24:MI'),
-		       FLOOR(EXTRACT(EPOCH FROM (p.fs - p.before)) / 86400)::int
-		FROM prev p
-		WHERE p.before IS NOT NULL AND EXTRACT(EPOCH FROM (p.fs - p.before)) >= $3::float8
-		ORDER BY p.fs - p.before DESC, p.hex LIMIT $4`,
-		start, tz, firstsBackAfter.Seconds(), perKind)
+		SELECT code, hex, cs, TO_CHAR(first_seen AT TIME ZONE $2, 'YYYY-MM-DD"T"HH24:MI') FROM (
+			SELECT DISTINCT ON (LEFT(TRIM(flight), 3)) LEFT(TRIM(flight), 3) AS code, hex, TRIM(flight) AS cs, first_seen
+			FROM aircraft_data
+			WHERE first_seen >= $1 AND TRIM(flight) ~ $3 AND hex NOT LIKE '~%'
+			ORDER BY LEFT(TRIM(flight), 3), first_seen
+		) t ORDER BY first_seen DESC`, start, tz, airlineCallsignRE)
 	if err != nil {
 		return out
 	}
-	for rows.Next() {
+	for rows.Next() && len(out) < perKind {
 		a := &homeAircraft{}
-		var when string
-		var days int
-		if rows.Scan(&a.Hex, &a.Callsign, &a.Type, &when, &days) != nil {
+		var code, when string
+		if rows.Scan(&code, &a.Hex, &a.Callsign, &when) != nil || known.airlines[code] {
+			continue
+		}
+		al, ok := data.LookupAirline(code)
+		if !ok {
 			continue
 		}
 		a.When = &when
-		out = append(out, homeFirst{Kind: "back", When: &when, Aircraft: a, Days: days})
+		out = append(out, homeFirst{Kind: "airline", When: &when, Aircraft: a, Code: code, Airline: al.Name})
+	}
+	rows.Close()
+	for _, f := range out {
+		s.homeDetails(ctx, f.Aircraft)
+	}
+	return out
+}
+
+// firstCountries: countries of registration seen today for the first time
+// ever (from the registration lookups), newest first.
+func (s *APIServer) firstCountries(ctx context.Context, start time.Time, tz string, known *beforeToday, perKind int) []homeFirst {
+	out := []homeFirst{}
+	rows, err := s.pg.db.Query(ctx, `
+		SELECT country, hex, cs, TO_CHAR(first_seen AT TIME ZONE $2, 'YYYY-MM-DD"T"HH24:MI') FROM (
+			SELECT DISTINCT ON (r.registered_owner_country_name) r.registered_owner_country_name AS country,
+			       a.hex, COALESCE(TRIM(a.flight), '') AS cs, a.first_seen
+			FROM aircraft_data a JOIN registration_data r ON r.mode_s = a.hex
+			WHERE a.first_seen >= $1 AND r.registered_owner_country_name IS NOT NULL AND r.registered_owner_country_name <> ''
+			ORDER BY r.registered_owner_country_name, a.first_seen
+		) t ORDER BY first_seen DESC`, start, tz)
+	if err != nil {
+		return out
+	}
+	for rows.Next() && len(out) < perKind {
+		a := &homeAircraft{}
+		var country, when string
+		if rows.Scan(&country, &a.Hex, &a.Callsign, &when) != nil || known.countries[country] {
+			continue
+		}
+		a.When = &when
+		out = append(out, homeFirst{Kind: "country", When: &when, Aircraft: a, Country: country})
 	}
 	rows.Close()
 	for _, f := range out {

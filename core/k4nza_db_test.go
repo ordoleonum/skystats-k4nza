@@ -64,6 +64,7 @@ func testPG(t *testing.T) *postgres {
 	testDB.recentAircraftCache = map[string]*aircraftCacheEntry{}
 	totalsExpires = time.Time{}
 	soonNow = nil
+	knownNow = nil
 	os.Unsetenv("RETENTION_DAYS")
 	return testDB
 }
