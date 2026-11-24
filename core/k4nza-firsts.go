@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -512,6 +513,11 @@ func (s *APIServer) firstMilestone(ctx context.Context, start, liveFrom time.Tim
 			FROM (`+newToday+`) n ORDER BY n.fs, n.hex OFFSET $4 LIMIT 1`,
 			start, liveFrom, tz, m-before-1).Scan(&a.Hex, &when, &a.Callsign, &a.Type); err != nil {
 			return homeFirst{}, false
+		}
+		// an unidentified target ("~": a TIS-B relay or other made-up address)
+		// has nothing real to name: the milestone shows the count only
+		if strings.HasPrefix(a.Hex, "~") {
+			return homeFirst{Kind: "milestone", When: &when, Number: m}, true
 		}
 		a.When = &when
 		s.homeDetails(ctx, &a)

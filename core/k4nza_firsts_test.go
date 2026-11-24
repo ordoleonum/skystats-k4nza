@@ -181,3 +181,35 @@ func TestK4nzaHomeFirstsNewStation(t *testing.T) {
 		t.Errorf("firsts %+v, want an empty list on a new station", res.Firsts)
 	}
 }
+
+// The 100th different aircraft is an unidentified "~" target: the milestone
+// still shows, without an aircraft.
+func TestK4nzaMilestoneUnidentified(t *testing.T) {
+	now := time.Now().UTC()
+	if now.Hour() == 0 && now.Minute() < 10 {
+		t.Skip("too close to midnight UTC")
+	}
+	pg := testPG(t)
+	r := testRouter(pg)
+	for i := 0; i < 99; i++ {
+		insertVisit(t, pg, testVisit{hex: fmt.Sprintf("b%05d", i), t: "B738", first: now.Add(-48 * time.Hour), rDstNm: 20, rDir: 90})
+	}
+	insertVisit(t, pg, testVisit{hex: "~abc123", first: now.Add(-5 * time.Minute), rDstNm: 20, rDir: 90}) // the 100th
+	insertVisit(t, pg, testVisit{hex: "b00100", t: "B738", first: now.Add(-3 * time.Minute), rDstNm: 20, rDir: 90})
+	recordNotableEvents(pg)
+	var res struct {
+		Firsts []struct {
+			Kind     string `json:"kind"`
+			Number   int64  `json:"number"`
+			Aircraft *struct {
+				Hex string `json:"hex"`
+			} `json:"aircraft"`
+		} `json:"firsts"`
+	}
+	if code := getJSON(t, r, "/api/k4nza/home?tz=UTC", &res); code != 200 {
+		t.Fatalf("HTTP %d", code)
+	}
+	if len(res.Firsts) != 1 || res.Firsts[0].Kind != "milestone" || res.Firsts[0].Number != 100 || res.Firsts[0].Aircraft != nil {
+		t.Errorf("firsts %+v, want the 100th aircraft milestone without an aircraft", res.Firsts)
+	}
+}
