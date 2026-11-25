@@ -2,7 +2,7 @@
     import { onMount } from 'svelte'
     import { fmtStationDay, fmtStationTime } from '../lib/stationTz.js';
     import { settings, refreshInterestingData } from '../stores/settings';
-    import { searchFor, searchGroup } from '../lib/search';
+    import { searchInNewTab, searchGroup } from '../lib/search';
 
     export let endpoint;
     export let title;
@@ -127,7 +127,7 @@
                             <tr class="hover:bg-base-300 cursor-pointer" on:click={() => showAircraftModal(aircraft)}>
                                 <td class="font-mono whitespace-nowrap">
                                     {#if aircraft.registration}
-                                        <button type="button" class="link link-hover text-primary font-mono" title="Search your history for {aircraft.registration}" on:click|stopPropagation={() => searchFor(aircraft.registration)}>{aircraft.registration}</button>
+                                        <button type="button" class="link link-hover text-primary font-mono" title="Search your history for {aircraft.registration} (opens a new tab)" on:click|stopPropagation={() => searchInNewTab(aircraft.registration)}>{aircraft.registration}</button>
                                     {:else}-{/if}
                                 </td>
                                 <td>{aircraft.operator || '–'}</td>
